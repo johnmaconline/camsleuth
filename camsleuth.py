@@ -11,11 +11,16 @@
 import argparse
 import csv
 import html
+import hashlib
+import http.server
 from html.parser import HTMLParser
 import json
 import logging
+import math
 import os
 import re
+import socketserver
+import sqlite3
 import sys
 import time
 import zipfile
@@ -41,6 +46,7 @@ DEFAULT_CACHE_DIR = './trailcam_cache'
 DEFAULT_API_MAP_DIR = './trailcam_api_maps'
 DEFAULT_PERSONAL_CACHE_DIR = './trailcam_personal_cache'
 DEFAULT_SOCIAL_CACHE_DIR = './trailcam_social_cache'
+DEFAULT_COVERAGE_DIR = './trailcam_coverage'
 DEFAULT_TIMEOUT_SEC = 30
 MAX_TEXT_BYTES = 1024 * 1024
 PERSONAL_CONFIG_PRIORITIES = {'high', 'medium_high', 'medium', 'low'}
@@ -56,6 +62,20 @@ SOCIAL_CREDENTIAL_KEYS = {
     'instagram_graph_api_token': '',
     'tiktok_api_token': '',
     'meta_api_token': ''
+}
+LOCATION_RESOLVER = {
+    'oley, pa': {'lat': 40.3876, 'lon': -75.7894, 'precision': 'site_declared_region', 'state': 'PA', 'county': 'Berks County', 'place': 'Oley'},
+    'oley valley': {'lat': 40.38, 'lon': -75.79, 'precision': 'site_declared_region', 'state': 'PA', 'county': 'Berks County', 'place': 'Oley Valley'},
+    'berks county, pa': {'lat': 40.3452, 'lon': -75.9928, 'precision': 'county_centroid', 'state': 'PA', 'county': 'Berks County', 'place': 'Berks County'},
+    'reading, pa': {'lat': 40.3356, 'lon': -75.9269, 'precision': 'site_declared_region', 'state': 'PA', 'county': 'Berks County', 'place': 'Reading'},
+    'pennsylvania': {'lat': 40.9699, 'lon': -77.7279, 'precision': 'state_centroid', 'state': 'PA'},
+    'pa': {'lat': 40.9699, 'lon': -77.7279, 'precision': 'state_centroid', 'state': 'PA'},
+    'philadelphia': {'lat': 39.9526, 'lon': -75.1652, 'precision': 'site_declared_region', 'state': 'PA', 'county': 'Philadelphia County', 'place': 'Philadelphia'},
+    'colorado front range': {'lat': 39.55, 'lon': -105.15, 'precision': 'site_declared_region', 'state': 'CO'},
+    'northern california': {'lat': 40.0, 'lon': -122.0, 'precision': 'site_declared_region', 'state': 'CA'},
+    'florida': {'lat': 27.6648, 'lon': -81.5158, 'precision': 'state_centroid', 'state': 'FL'},
+    'alaska': {'lat': 64.2008, 'lon': -149.4937, 'precision': 'state_centroid', 'state': 'AK'},
+    'ontario': {'lat': 50.0, 'lon': -85.0, 'precision': 'state_centroid', 'state': 'Ontario', 'country': 'CA'}
 }
 SOCIAL_HIGH_VALUE_TERMS = {
     'bobcat', 'coyote', 'bear', 'mountain lion', 'cougar', 'panther',
@@ -1459,6 +1479,1195 @@ def import_social_manual_seeds(path, output_dir=DEFAULT_SOCIAL_CACHE_DIR):
         summaries.append(summary)
     return {'sources': summaries}
 
+def utc_today():
+    '''
+    Return today's date string.
+    '''
+    return date.today().isoformat()
+
+def stable_id(*parts):
+    '''
+    Build a stable identifier from text parts.
+    '''
+    joined = '|'.join(str(part or '') for part in parts)
+    return hashlib.sha1(joined.encode('utf-8')).hexdigest()[:20]
+
+def resolve_broad_location(location_text):
+    '''
+    Resolve a broad location from static known regions.
+    '''
+    if not location_text:
+        return {
+            'latitude': None, 'longitude': None, 'coordinate_precision': 'unknown',
+            'admin_country': '', 'admin_state': '', 'admin_county': '', 'admin_place': '',
+            'location_label': '', 'confidence_score': 0.0
+        }
+    lower = location_text.lower()
+    for key, value in LOCATION_RESOLVER.items():
+        if key in lower:
+            return {
+                'latitude': value.get('lat'),
+                'longitude': value.get('lon'),
+                'coordinate_precision': value.get('precision', 'unknown'),
+                'admin_country': value.get('country', 'US' if value.get('state') else ''),
+                'admin_state': value.get('state', ''),
+                'admin_county': value.get('county', ''),
+                'admin_place': value.get('place', ''),
+                'location_label': location_text,
+                'confidence_score': 0.55 if value.get('precision') == 'county_centroid' else 0.45
+            }
+    return {
+        'latitude': None, 'longitude': None, 'coordinate_precision': 'unknown',
+        'admin_country': '', 'admin_state': '', 'admin_county': '', 'admin_place': '',
+        'location_label': location_text, 'confidence_score': 0.0
+    }
+
+def haversine_miles(lat1, lon1, lat2, lon2):
+    '''
+    Compute haversine distance in miles.
+    '''
+    if None in (lat1, lon1, lat2, lon2):
+        return None
+    r = 3958.8
+    p1 = math.radians(lat1)
+    p2 = math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlambda = math.radians(lon2 - lon1)
+    a = math.sin(dphi / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dlambda / 2) ** 2
+    return 2 * r * math.asin(math.sqrt(a))
+
+def calculate_deployment_confidence(record):
+    '''
+    Score one normalized deployment record.
+    '''
+    precision = record.get('coordinate_precision', 'unknown')
+    score = 0.0
+    if precision == 'exact_public':
+        score += 0.45
+    elif precision == 'fuzzed_public':
+        score += 0.35
+    elif precision in ('project_centroid', 'park_or_public_land_centroid'):
+        score += 0.25
+    elif precision == 'county_centroid':
+        score += 0.15
+    elif precision == 'state_centroid':
+        score += 0.08
+    elif precision in ('site_declared_region', 'creator_profile_region', 'hashtag_region'):
+        score += 0.10
+    elif precision == 'location_id_only':
+        score += 0.05
+    image_count = int(record.get('image_count') or 0)
+    if image_count >= 1000:
+        score += 0.20
+    elif image_count >= 100:
+        score += 0.12
+    elif image_count > 0:
+        score += 0.05
+    camera_days = record.get('camera_days')
+    if camera_days and camera_days >= 30:
+        score += 0.15
+    elif camera_days and camera_days > 0:
+        score += 0.05
+    if record.get('species_terms'):
+        score += 0.10
+    if record.get('license_status') in ('public_domain_confirmed', 'creative_commons_confirmed', 'permission_obtained'):
+        score += 0.10
+    return min(score, 1.0)
+
+def calculate_direct_fov_area(range_ft=60, fov_degrees=50, obstruction_factor=0.5):
+    '''
+    Calculate aggregate field-of-view estimates.
+    '''
+    sector_area_sqft = math.pi * (range_ft ** 2) * (fov_degrees / 360.0)
+    effective_area_sqft = sector_area_sqft * obstruction_factor
+    return {
+        'sector_area_sqft': sector_area_sqft,
+        'effective_area_sqft': effective_area_sqft,
+        'effective_area_acres': effective_area_sqft / 43560.0
+    }
+
+def merge_species_blobs(blob_text):
+    '''
+    Merge concatenated JSON species arrays into a flat sorted list.
+    '''
+    terms = set()
+    for blob in (blob_text or '').split('|'):
+        blob = blob.strip()
+        if not blob:
+            continue
+        try:
+            values = json.loads(blob)
+        except json.JSONDecodeError:
+            values = []
+        for term in values:
+            if term:
+                terms.add(term)
+    return sorted(terms)
+
+def safe_json_loads(blob, fallback):
+    '''
+    Load JSON blobs defensively.
+    '''
+    if blob in (None, ''):
+        return fallback
+    try:
+        return json.loads(blob)
+    except (TypeError, json.JSONDecodeError):
+        return fallback
+
+def priority_for_lead_score(score):
+    '''
+    Map normalized lead score to a simple priority bucket.
+    '''
+    if score >= 0.75:
+        return 'high'
+    if score >= 0.45:
+        return 'medium'
+    return 'low'
+
+def score_creator_lead(record, target_place=None):
+    '''
+    Score one creator/account lead on a normalized 0-1 scale.
+    '''
+    text_parts = [
+        record.get('creator_handle', ''), record.get('creator_display_name', ''),
+        record.get('location_label', ''), record.get('notes', ''), record.get('platform', ''),
+        record.get('source_type', ''), target_place or ''
+    ]
+    species_terms = record.get('species_terms', []) or []
+    text_parts.extend(species_terms)
+    text = ' '.join(str(part).lower() for part in text_parts if part)
+    score = 0.0
+    if any(term in text for term in ('trailcam', 'trail cam', 'trail camera', 'game cam', 'camera trap')):
+        score += 3
+    if any(term in text for term in ('oley', 'berks', 'reading', 'pennsylvania', 'pa wildlife', 'pawildlife')):
+        score += 3
+    post_count = int(record.get('post_count_seen') or 0)
+    if post_count >= 5:
+        score += 3
+    elif post_count >= 2:
+        score += 2
+    elif post_count >= 1:
+        score += 1
+    if record.get('contact_path'):
+        score += 2
+    if species_terms:
+        score += 2
+    if any(species in species_terms for species in ('bobcat', 'coyote', 'bear', 'deer', 'turkey', 'fox', 'raccoon', 'person', 'vehicle')):
+        score += 2
+    platform = (record.get('platform') or '').lower()
+    if platform == 'youtube':
+        score += 2
+    elif platform in ('instagram', 'tiktok', 'facebook'):
+        score += 1
+    return min(score / 15.0, 1.0)
+
+def init_location_index(db_path):
+    '''
+    Initialize the location index schema.
+    '''
+    Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(db_path)
+    cur = conn.cursor()
+    cur.executescript("""
+    CREATE TABLE IF NOT EXISTS camera_sources (
+        source_id TEXT PRIMARY KEY, source_type TEXT, platform TEXT, display_name TEXT,
+        base_url TEXT, source_config_path TEXT, license_status TEXT, permission_status TEXT,
+        priority TEXT, notes TEXT, created_at TEXT, updated_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS camera_deployments (
+        deployment_id TEXT PRIMARY KEY, source_id TEXT NOT NULL, dataset_id TEXT, location_id TEXT,
+        latitude REAL, longitude REAL, coordinate_precision TEXT NOT NULL, coordinate_public INTEGER DEFAULT 0,
+        coordinate_obfuscated INTEGER DEFAULT 0, start_date TEXT, end_date TEXT, camera_days REAL,
+        image_count INTEGER DEFAULT 0, sequence_count INTEGER DEFAULT 0, video_count INTEGER DEFAULT 0,
+        species_count INTEGER DEFAULT 0, species_terms TEXT, habitat_terms TEXT, location_label TEXT,
+        admin_country TEXT, admin_state TEXT, admin_county TEXT, admin_place TEXT, source_url TEXT,
+        page_url TEXT, license_status TEXT, permission_status TEXT, confidence_score REAL DEFAULT 0,
+        created_at TEXT, updated_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS camera_observations (
+        observation_id TEXT PRIMARY KEY, deployment_id TEXT, source_id TEXT NOT NULL, media_url TEXT,
+        page_url TEXT, observed_at TEXT, species_terms TEXT, category_terms TEXT, has_person INTEGER DEFAULT 0,
+        has_vehicle INTEGER DEFAULT 0, has_bbox INTEGER DEFAULT 0, sequence_id TEXT, license_status TEXT,
+        permission_status TEXT, confidence_score REAL DEFAULT 0, created_at TEXT, updated_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS location_signals (
+        signal_id TEXT PRIMARY KEY, source_id TEXT NOT NULL, signal_type TEXT, raw_text TEXT, normalized_label TEXT,
+        latitude REAL, longitude REAL, coordinate_precision TEXT NOT NULL, admin_country TEXT, admin_state TEXT,
+        admin_county TEXT, admin_place TEXT, page_url TEXT, post_url TEXT, creator_id TEXT, species_terms TEXT,
+        confidence_score REAL DEFAULT 0, created_at TEXT, updated_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS creator_leads (
+        lead_id TEXT PRIMARY KEY, source_id TEXT NOT NULL, platform TEXT, creator_handle TEXT, creator_display_name TEXT,
+        profile_url TEXT, contact_path TEXT, source_type TEXT, location_label TEXT, admin_state TEXT, admin_county TEXT,
+        admin_place TEXT, species_terms TEXT, sample_urls TEXT, post_count_seen INTEGER DEFAULT 0, media_count_seen INTEGER DEFAULT 0,
+        video_count_seen INTEGER DEFAULT 0, license_status TEXT, permission_status TEXT DEFAULT 'not_requested',
+        review_status TEXT DEFAULT 'candidate', lead_score REAL DEFAULT 0, priority TEXT, notes TEXT, created_at TEXT, updated_at TEXT
+    );
+    DROP TABLE IF EXISTS coverage_cells;
+    CREATE TABLE IF NOT EXISTS coverage_cells (
+        cell_id TEXT, grid_type TEXT, resolution INTEGER, source_count INTEGER DEFAULT 0,
+        deployment_count INTEGER DEFAULT 0, signal_count INTEGER DEFAULT 0, observation_count INTEGER DEFAULT 0,
+        lead_count INTEGER DEFAULT 0, camera_days REAL DEFAULT 0,
+        image_count INTEGER DEFAULT 0, sequence_count INTEGER DEFAULT 0, video_count INTEGER DEFAULT 0,
+        species_terms TEXT, precision_rollup TEXT, first_seen TEXT, last_seen TEXT, confidence_score REAL DEFAULT 0,
+        created_at TEXT, updated_at TEXT, PRIMARY KEY(cell_id, grid_type, resolution)
+    );
+    CREATE TABLE IF NOT EXISTS coverage_reports (
+        report_id TEXT PRIMARY KEY, report_type TEXT, place_name TEXT, latitude REAL, longitude REAL,
+        radius_miles REAL, report_path TEXT, summary_json TEXT, created_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_deployments_source_id ON camera_deployments(source_id);
+    CREATE INDEX IF NOT EXISTS idx_deployments_lat_lon ON camera_deployments(latitude, longitude);
+    CREATE INDEX IF NOT EXISTS idx_deployments_precision ON camera_deployments(coordinate_precision);
+    CREATE INDEX IF NOT EXISTS idx_deployments_admin_state ON camera_deployments(admin_state);
+    CREATE INDEX IF NOT EXISTS idx_deployments_admin_county ON camera_deployments(admin_county);
+    CREATE INDEX IF NOT EXISTS idx_observations_source_id ON camera_observations(source_id);
+    CREATE INDEX IF NOT EXISTS idx_observations_deployment_id ON camera_observations(deployment_id);
+    CREATE INDEX IF NOT EXISTS idx_location_signals_source_id ON location_signals(source_id);
+    CREATE INDEX IF NOT EXISTS idx_location_signals_admin_state ON location_signals(admin_state);
+    CREATE INDEX IF NOT EXISTS idx_location_signals_admin_county ON location_signals(admin_county);
+    CREATE INDEX IF NOT EXISTS idx_creator_leads_source_id ON creator_leads(source_id);
+    CREATE INDEX IF NOT EXISTS idx_creator_leads_review_status ON creator_leads(review_status);
+    CREATE INDEX IF NOT EXISTS idx_creator_leads_lead_score ON creator_leads(lead_score);
+    CREATE INDEX IF NOT EXISTS idx_cells_resolution ON coverage_cells(grid_type, resolution);
+    """)
+    conn.commit()
+    conn.close()
+
+def normalize_open_db_locations(db_config_path, cache_dir):
+    '''
+    Normalize location-aware records from open DB configs/caches.
+    '''
+    records = {'sources': [], 'deployments': [], 'observations': [], 'signals': [], 'leads': []}
+    config = load_json(db_config_path)
+    for db in config.get('databases', []):
+        records['sources'].append({
+            'source_id': db.get('id'),
+            'source_type': 'open_db',
+            'platform': db.get('adapter'),
+            'display_name': db.get('name'),
+            'base_url': db.get('homepage_url') or db.get('catalog_url') or '',
+            'source_config_path': db_config_path,
+            'license_status': db.get('auth', {}).get('type', 'unknown'),
+            'permission_status': 'not_requested',
+            'priority': 'medium',
+            'notes': db.get('notes', '')
+        })
+        if db.get('adapter') == 'lila_coco_zip':
+            try:
+                metadata = load_local_metadata(db, cache_dir)
+            except ConfigError:
+                continue
+            images = metadata.get('images', [])
+            annotations = metadata.get('annotations', [])
+            by_loc = {}
+            species_by_loc = {}
+            image_by_id = {img.get('id'): img for img in images}
+            category_by_id = {cat.get('id'): cat.get('name') for cat in metadata.get('categories', [])}
+            for img in images:
+                loc = str(img.get('location') or img.get('location_id') or 'unknown')
+                bucket = by_loc.setdefault(loc, {'image_count': 0, 'video_count': 0, 'sequence_ids': set(), 'sample_image': img})
+                bucket['image_count'] += 1
+                if img.get('seq_id'):
+                    bucket['sequence_ids'].add(str(img.get('seq_id')))
+            for ann in annotations:
+                img = image_by_id.get(ann.get('image_id'))
+                loc = str((img or {}).get('location') or (img or {}).get('location_id') or 'unknown')
+                species_by_loc.setdefault(loc, set()).add(category_by_id.get(ann.get('category_id'), ''))
+            for loc, bucket in by_loc.items():
+                sample = bucket['sample_image']
+                deployment = {
+                    'deployment_id': stable_id(db.get('id'), loc),
+                    'source_id': db.get('id'),
+                    'dataset_id': db.get('id'),
+                    'location_id': loc,
+                    'latitude': None,
+                    'longitude': None,
+                    'coordinate_precision': 'location_id_only',
+                    'coordinate_public': 0,
+                    'coordinate_obfuscated': 0,
+                    'start_date': sample.get('date_captured') or sample.get('datetime') or '',
+                    'end_date': sample.get('date_captured') or sample.get('datetime') or '',
+                    'camera_days': None,
+                    'image_count': bucket['image_count'],
+                    'sequence_count': len(bucket['sequence_ids']),
+                    'video_count': 0,
+                    'species_count': len(species_by_loc.get(loc, set())),
+                    'species_terms': sorted(term for term in species_by_loc.get(loc, set()) if term),
+                    'habitat_terms': [],
+                    'location_label': loc,
+                    'admin_country': '',
+                    'admin_state': '',
+                    'admin_county': '',
+                    'admin_place': '',
+                    'source_url': db.get('homepage_url') or '',
+                    'page_url': db.get('homepage_url') or '',
+                    'license_status': 'unknown_contact_required',
+                    'permission_status': 'not_requested'
+                }
+                deployment['confidence_score'] = calculate_deployment_confidence(deployment)
+                records['deployments'].append(deployment)
+        else:
+            label = db.get('name') or db.get('id')
+            resolved = resolve_broad_location(label)
+            records['signals'].append({
+                'signal_id': stable_id(db.get('id'), label, 'signal'),
+                'source_id': db.get('id'),
+                'latitude': resolved['latitude'],
+                'longitude': resolved['longitude'],
+                'signal_type': 'dataset_region',
+                'raw_text': label,
+                'normalized_label': resolved['location_label'] or label,
+                'coordinate_precision': resolved['coordinate_precision'],
+                'species_terms': [],
+                'admin_country': resolved['admin_country'],
+                'admin_state': resolved['admin_state'],
+                'admin_county': resolved['admin_county'],
+                'admin_place': resolved['admin_place'],
+                'page_url': db.get('homepage_url') or '',
+                'post_url': db.get('homepage_url') or '',
+                'creator_id': '',
+                'confidence_score': resolved.get('confidence_score', 0.0)
+            })
+    return records
+
+def normalize_personal_locations(cache_dir, config_path):
+    '''
+    Normalize location-aware records from personal-source cache.
+    '''
+    records = {'sources': [], 'deployments': [], 'observations': [], 'signals': [], 'leads': []}
+    config = load_json(config_path)
+    for source in config.get('sources', []):
+        source_id = source.get('source_id')
+        records['sources'].append({
+            'source_id': source_id,
+            'source_type': 'personal',
+            'platform': source.get('platform'),
+            'display_name': source.get('display_name'),
+            'base_url': source.get('base_url'),
+            'source_config_path': config_path,
+            'license_status': source.get('license_status'),
+            'permission_status': 'not_requested',
+            'priority': source.get('priority', ''),
+            'notes': source.get('notes', '')
+        })
+        summary_path = Path(cache_dir) / source_id / 'source_summary.json'
+        pages_path = Path(cache_dir) / source_id / 'pages.jsonl'
+        if not summary_path.exists():
+            continue
+        summary = load_json(summary_path)
+        broad_locations = summary.get('broad_location', []) or [source.get('display_name', '')]
+        for idx, broad in enumerate(broad_locations or ['']):
+            resolved = resolve_broad_location(broad)
+            records['signals'].append({
+                'signal_id': stable_id(source_id, broad or 'unknown', idx, 'signal'),
+                'source_id': source_id,
+                'signal_type': 'site_declared_region',
+                'raw_text': broad or source.get('display_name'),
+                'normalized_label': resolved['location_label'] or broad or source.get('display_name'),
+                'latitude': resolved['latitude'],
+                'longitude': resolved['longitude'],
+                'coordinate_precision': resolved['coordinate_precision'] if resolved['coordinate_precision'] != 'unknown' else 'site_declared_region',
+                'species_terms': summary.get('species_seen', []),
+                'admin_country': resolved['admin_country'],
+                'admin_state': resolved['admin_state'],
+                'admin_county': resolved['admin_county'],
+                'admin_place': resolved['admin_place'],
+                'page_url': source.get('base_url'),
+                'post_url': source.get('base_url'),
+                'creator_id': source_id,
+                'confidence_score': resolved.get('confidence_score', 0.0)
+            })
+        lead_resolved = resolve_broad_location((broad_locations or [''])[0])
+        lead = {
+            'lead_id': stable_id(source_id, 'lead'),
+            'source_id': source_id,
+            'platform': source.get('platform'),
+            'creator_handle': source.get('display_name'),
+            'creator_display_name': source.get('display_name'),
+            'profile_url': source.get('base_url'),
+            'contact_path': source.get('contact_path') or source.get('base_url'),
+            'source_type': 'personal',
+            'location_label': ', '.join(broad_locations),
+            'admin_state': lead_resolved.get('admin_state', ''),
+            'admin_county': lead_resolved.get('admin_county', ''),
+            'admin_place': lead_resolved.get('admin_place', ''),
+            'species_terms': summary.get('species_seen', []),
+            'sample_urls': [source.get('base_url')],
+            'post_count_seen': int(summary.get('page_count') or 0),
+            'media_count_seen': int(summary.get('media_count') or 0),
+            'video_count_seen': int(summary.get('video_count') or 0),
+            'license_status': source.get('license_status'),
+            'permission_status': 'not_requested',
+            'review_status': 'candidate',
+            'notes': source.get('notes', '')
+        }
+        lead['lead_score'] = score_creator_lead(lead)
+        lead['priority'] = priority_for_lead_score(lead['lead_score'])
+        records['leads'].append(lead)
+        if pages_path.exists():
+            for page in read_jsonl(pages_path):
+                records['observations'].append({
+                    'observation_id': stable_id(source_id, page.get('page_url')),
+                    'deployment_id': None,
+                    'source_id': source_id,
+                    'media_url': '|'.join(page.get('image_urls', [])[:10]),
+                    'page_url': page.get('page_url'),
+                    'observed_at': page.get('page_date') or '',
+                    'species_terms': page.get('species_terms', []),
+                    'category_terms': [],
+                    'has_person': 0,
+                    'has_vehicle': 0,
+                    'has_bbox': 0,
+                    'sequence_id': '',
+                    'license_status': page.get('license_status', source.get('license_status')),
+                    'permission_status': 'not_requested'
+                })
+    return records
+
+def normalize_social_locations(cache_dir, config_path):
+    '''
+    Normalize location-aware records from social-source cache.
+    '''
+    records = {'sources': [], 'deployments': [], 'observations': [], 'signals': [], 'leads': []}
+    config = load_json(config_path)
+    for source in config.get('sources', []):
+        source_id = source.get('source_id')
+        records['sources'].append({
+            'source_id': source_id,
+            'source_type': 'social',
+            'platform': source.get('platform'),
+            'display_name': source.get('display_name'),
+            'base_url': source.get('base_url'),
+            'source_config_path': config_path,
+            'license_status': source.get('license_status'),
+            'permission_status': source.get('permission_status'),
+            'priority': source.get('priority', ''),
+            'notes': source.get('notes', '')
+        })
+        posts_path = Path(cache_dir) / source_id / 'posts.jsonl'
+        if not posts_path.exists():
+            continue
+        posts = read_jsonl(posts_path)
+        by_key = {}
+        lead_buckets = {}
+        for post in posts:
+            broad = (post.get('broad_location') or ['unknown'])[0] if isinstance(post.get('broad_location'), list) else post.get('broad_location') or 'unknown'
+            key = broad or post.get('creator_display_name') or post.get('query') or 'unknown'
+            bucket = by_key.setdefault(key, {'posts': [], 'species': set()})
+            bucket['posts'].append(post)
+            bucket['species'].update(post.get('species_terms', []))
+            creator_key = post.get('creator_handle') or post.get('creator_display_name') or post.get('creator_id') or post.get('query') or 'unknown'
+            lead_bucket = lead_buckets.setdefault(creator_key, {'posts': [], 'species': set(), 'locations': set()})
+            lead_bucket['posts'].append(post)
+            lead_bucket['species'].update(post.get('species_terms', []))
+            if broad:
+                lead_bucket['locations'].add(broad)
+        for key, bucket in by_key.items():
+            resolved = resolve_broad_location(key)
+            precision = resolved['coordinate_precision']
+            if precision == 'state_centroid':
+                precision = 'creator_profile_region'
+            elif precision == 'county_centroid':
+                precision = 'hashtag_region'
+            records['signals'].append({
+                'signal_id': stable_id(source_id, key, 'signal'),
+                'source_id': source_id,
+                'signal_type': 'social_location',
+                'raw_text': key,
+                'normalized_label': resolved['location_label'] or key,
+                'latitude': resolved['latitude'],
+                'longitude': resolved['longitude'],
+                'coordinate_precision': precision,
+                'species_terms': sorted(bucket['species']),
+                'admin_country': resolved['admin_country'],
+                'admin_state': resolved['admin_state'],
+                'admin_county': resolved['admin_county'],
+                'admin_place': resolved['admin_place'],
+                'page_url': source.get('base_url'),
+                'post_url': bucket['posts'][0].get('post_url') or source.get('base_url'),
+                'creator_id': bucket['posts'][0].get('creator_id') or '',
+                'confidence_score': resolved.get('confidence_score', 0.0)
+            })
+            for post in bucket['posts']:
+                records['observations'].append({
+                    'observation_id': stable_id(source_id, post.get('post_url'), post.get('query')),
+                    'deployment_id': None,
+                    'source_id': source_id,
+                    'media_url': '',
+                    'page_url': post.get('post_url') or '',
+                    'observed_at': post.get('posted_at') or '',
+                    'species_terms': post.get('species_terms', []),
+                    'category_terms': [],
+                    'has_person': 1 if 'person' in post.get('species_terms', []) else 0,
+                    'has_vehicle': 1 if 'vehicle' in post.get('species_terms', []) else 0,
+                    'has_bbox': 0,
+                    'sequence_id': '',
+                    'license_status': source.get('license_status'),
+                    'permission_status': source.get('permission_status')
+                })
+        for creator_key, bucket in lead_buckets.items():
+            sample = bucket['posts'][0]
+            resolved = resolve_broad_location(next(iter(bucket['locations']), sample.get('query') or ''))
+            lead = {
+                'lead_id': stable_id(source_id, creator_key, 'lead'),
+                'source_id': source_id,
+                'platform': source.get('platform'),
+                'creator_handle': sample.get('creator_handle') or creator_key,
+                'creator_display_name': sample.get('creator_display_name') or creator_key,
+                'profile_url': sample.get('profile_url') or sample.get('creator_url') or source.get('base_url'),
+                'contact_path': sample.get('profile_url') or sample.get('creator_url') or '',
+                'source_type': 'social',
+                'location_label': ', '.join(sorted(bucket['locations'])) or sample.get('query') or '',
+                'admin_state': resolved.get('admin_state', ''),
+                'admin_county': resolved.get('admin_county', ''),
+                'admin_place': resolved.get('admin_place', ''),
+                'species_terms': sorted(bucket['species']),
+                'sample_urls': [post.get('post_url') for post in bucket['posts'][:5] if post.get('post_url')],
+                'post_count_seen': len(bucket['posts']),
+                'media_count_seen': len(bucket['posts']),
+                'video_count_seen': len([post for post in bucket['posts'] if post.get('media_type') == 'video']),
+                'license_status': source.get('license_status'),
+                'permission_status': source.get('permission_status'),
+                'review_status': 'candidate',
+                'notes': source.get('notes', '')
+            }
+            lead['lead_score'] = score_creator_lead(lead)
+            lead['priority'] = priority_for_lead_score(lead['lead_score'])
+            records['leads'].append(lead)
+    return records
+
+def upsert_location_records(conn, records):
+    '''
+    Upsert normalized source/deployment/observation records.
+    '''
+    cur = conn.cursor()
+    now = utc_today()
+    for source in records.get('sources', []):
+        cur.execute("""
+        INSERT OR REPLACE INTO camera_sources
+        (source_id, source_type, platform, display_name, base_url, source_config_path, license_status, permission_status, priority, notes, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE((SELECT created_at FROM camera_sources WHERE source_id = ?), ?), ?)
+        """, (
+            source.get('source_id'), source.get('source_type'), source.get('platform'), source.get('display_name'),
+            source.get('base_url'), source.get('source_config_path'), source.get('license_status'),
+            source.get('permission_status'), source.get('priority'), source.get('notes'),
+            source.get('source_id'), now, now
+        ))
+    for deployment in records.get('deployments', []):
+        cur.execute("""
+        INSERT OR REPLACE INTO camera_deployments
+        (deployment_id, source_id, dataset_id, location_id, latitude, longitude, coordinate_precision, coordinate_public, coordinate_obfuscated,
+         start_date, end_date, camera_days, image_count, sequence_count, video_count, species_count, species_terms, habitat_terms,
+         location_label, admin_country, admin_state, admin_county, admin_place, source_url, page_url, license_status, permission_status,
+         confidence_score, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE((SELECT created_at FROM camera_deployments WHERE deployment_id = ?), ?), ?)
+        """, (
+            deployment.get('deployment_id'), deployment.get('source_id'), deployment.get('dataset_id'), deployment.get('location_id'),
+            deployment.get('latitude'), deployment.get('longitude'), deployment.get('coordinate_precision'),
+            int(bool(deployment.get('coordinate_public'))), int(bool(deployment.get('coordinate_obfuscated'))),
+            deployment.get('start_date'), deployment.get('end_date'), deployment.get('camera_days'),
+            int(deployment.get('image_count') or 0), int(deployment.get('sequence_count') or 0), int(deployment.get('video_count') or 0),
+            int(deployment.get('species_count') or 0), json.dumps(deployment.get('species_terms', [])), json.dumps(deployment.get('habitat_terms', [])),
+            deployment.get('location_label'), deployment.get('admin_country'), deployment.get('admin_state'), deployment.get('admin_county'),
+            deployment.get('admin_place'), deployment.get('source_url'), deployment.get('page_url'),
+            deployment.get('license_status'), deployment.get('permission_status'), deployment.get('confidence_score'),
+            deployment.get('deployment_id'), now, now
+        ))
+    for observation in records.get('observations', []):
+        cur.execute("""
+        INSERT OR REPLACE INTO camera_observations
+        (observation_id, deployment_id, source_id, media_url, page_url, observed_at, species_terms, category_terms, has_person, has_vehicle, has_bbox, sequence_id,
+         license_status, permission_status, confidence_score, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE((SELECT created_at FROM camera_observations WHERE observation_id = ?), ?), ?)
+        """, (
+            observation.get('observation_id'), observation.get('deployment_id'), observation.get('source_id'), observation.get('media_url'),
+            observation.get('page_url'), observation.get('observed_at'), json.dumps(observation.get('species_terms', [])),
+            json.dumps(observation.get('category_terms', [])), int(bool(observation.get('has_person'))),
+            int(bool(observation.get('has_vehicle'))), int(bool(observation.get('has_bbox'))), observation.get('sequence_id'),
+            observation.get('license_status'), observation.get('permission_status'),
+            float(observation.get('confidence_score') or 0.0), observation.get('observation_id'), now, now
+        ))
+    for signal in records.get('signals', []):
+        cur.execute("""
+        INSERT OR REPLACE INTO location_signals
+        (signal_id, source_id, signal_type, raw_text, normalized_label, latitude, longitude, coordinate_precision,
+         admin_country, admin_state, admin_county, admin_place, page_url, post_url, creator_id, species_terms,
+         confidence_score, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE((SELECT created_at FROM location_signals WHERE signal_id = ?), ?), ?)
+        """, (
+            signal.get('signal_id'), signal.get('source_id'), signal.get('signal_type'), signal.get('raw_text'),
+            signal.get('normalized_label'), signal.get('latitude'), signal.get('longitude'), signal.get('coordinate_precision'),
+            signal.get('admin_country'), signal.get('admin_state'), signal.get('admin_county'), signal.get('admin_place'),
+            signal.get('page_url'), signal.get('post_url'), signal.get('creator_id'),
+            json.dumps(signal.get('species_terms', [])), float(signal.get('confidence_score') or 0.0),
+            signal.get('signal_id'), now, now
+        ))
+    for lead in records.get('leads', []):
+        cur.execute("""
+        INSERT OR REPLACE INTO creator_leads
+        (lead_id, source_id, platform, creator_handle, creator_display_name, profile_url, contact_path, source_type,
+         location_label, admin_state, admin_county, admin_place, species_terms, sample_urls, post_count_seen, media_count_seen,
+         video_count_seen, license_status, permission_status, review_status, lead_score, priority, notes, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE((SELECT created_at FROM creator_leads WHERE lead_id = ?), ?), ?)
+        """, (
+            lead.get('lead_id'), lead.get('source_id'), lead.get('platform'), lead.get('creator_handle'),
+            lead.get('creator_display_name'), lead.get('profile_url'), lead.get('contact_path'), lead.get('source_type'),
+            lead.get('location_label'), lead.get('admin_state'), lead.get('admin_county'), lead.get('admin_place'),
+            json.dumps(lead.get('species_terms', [])), json.dumps(lead.get('sample_urls', [])),
+            int(lead.get('post_count_seen') or 0), int(lead.get('media_count_seen') or 0), int(lead.get('video_count_seen') or 0),
+            lead.get('license_status'), lead.get('permission_status'), lead.get('review_status', 'candidate'),
+            float(lead.get('lead_score') or 0.0), lead.get('priority'), lead.get('notes'),
+            lead.get('lead_id'), now, now
+        ))
+    conn.commit()
+
+def rebuild_coverage_cells(conn, resolution):
+    '''
+    Recompute fallback grid coverage cells.
+    '''
+    cur = conn.cursor()
+    cur.execute("DELETE FROM coverage_cells")
+    deployment_rows = cur.execute("""
+    SELECT deployment_id, source_id, latitude, longitude, coordinate_precision, camera_days, image_count, sequence_count, video_count,
+           species_terms, confidence_score, start_date, end_date
+    FROM camera_deployments
+    """).fetchall()
+    signal_rows = cur.execute("""
+    SELECT signal_id, source_id, latitude, longitude, coordinate_precision, species_terms, confidence_score
+    FROM location_signals
+    """).fetchall()
+    lead_rows = cur.execute("""
+    SELECT lead_id, source_id, location_label, admin_state, admin_county, admin_place, species_terms, lead_score
+    FROM creator_leads
+    """).fetchall()
+    buckets = {}
+    for row in deployment_rows:
+        dep_id, source_id, lat, lon, precision, camera_days, image_count, sequence_count, video_count, species_terms, confidence, start_date, end_date = row
+        if lat is None or lon is None:
+            continue
+        lat_bucket = round(lat, 2)
+        lon_bucket = round(lon, 2)
+        cell_id = f'grid_{lat_bucket}_{lon_bucket}'
+        bucket = buckets.setdefault(cell_id, {
+            'sources': set(), 'deployments': 0, 'signals': 0, 'leads': 0, 'camera_days': 0.0, 'image_count': 0,
+            'sequence_count': 0, 'video_count': 0, 'species_terms': set(), 'precision_rollup': {},
+            'first_seen': '', 'last_seen': '', 'confidence_total': 0.0
+        })
+        bucket['sources'].add(source_id)
+        bucket['deployments'] += 1
+        bucket['camera_days'] += float(camera_days or 0.0)
+        bucket['image_count'] += int(image_count or 0)
+        bucket['sequence_count'] += int(sequence_count or 0)
+        bucket['video_count'] += int(video_count or 0)
+        bucket['species_terms'].update(safe_json_loads(species_terms, []))
+        bucket['precision_rollup'][precision] = bucket['precision_rollup'].get(precision, 0) + 1
+        bucket['first_seen'] = min(filter(None, [bucket['first_seen'], start_date])) if bucket['first_seen'] and start_date else (bucket['first_seen'] or start_date or '')
+        bucket['last_seen'] = max(filter(None, [bucket['last_seen'], end_date])) if bucket['last_seen'] and end_date else (bucket['last_seen'] or end_date or '')
+        bucket['confidence_total'] += float(confidence or 0.0)
+    for _, source_id, lat, lon, precision, species_terms, confidence in signal_rows:
+        if lat is None or lon is None:
+            continue
+        cell_id = f'grid_{round(lat, 2)}_{round(lon, 2)}'
+        bucket = buckets.setdefault(cell_id, {
+            'sources': set(), 'deployments': 0, 'signals': 0, 'leads': 0, 'camera_days': 0.0, 'image_count': 0,
+            'sequence_count': 0, 'video_count': 0, 'species_terms': set(), 'precision_rollup': {},
+            'first_seen': '', 'last_seen': '', 'confidence_total': 0.0
+        })
+        bucket['sources'].add(source_id)
+        bucket['signals'] += 1
+        bucket['species_terms'].update(safe_json_loads(species_terms, []))
+        bucket['precision_rollup'][precision] = bucket['precision_rollup'].get(precision, 0) + 1
+        bucket['confidence_total'] += float(confidence or 0.0)
+    for _, source_id, location_label, state, county, place, species_terms, confidence in lead_rows:
+        resolved = resolve_broad_location(location_label or ', '.join(part for part in (place, county, state) if part))
+        if resolved.get('latitude') is None or resolved.get('longitude') is None:
+            continue
+        cell_id = f'grid_{round(resolved["latitude"], 2)}_{round(resolved["longitude"], 2)}'
+        bucket = buckets.setdefault(cell_id, {
+            'sources': set(), 'deployments': 0, 'signals': 0, 'leads': 0, 'camera_days': 0.0, 'image_count': 0,
+            'sequence_count': 0, 'video_count': 0, 'species_terms': set(), 'precision_rollup': {},
+            'first_seen': '', 'last_seen': '', 'confidence_total': 0.0
+        })
+        bucket['sources'].add(source_id)
+        bucket['leads'] += 1
+        bucket['species_terms'].update(safe_json_loads(species_terms, []))
+        precision = resolved.get('coordinate_precision', 'unknown')
+        bucket['precision_rollup'][precision] = bucket['precision_rollup'].get(precision, 0) + 1
+        bucket['confidence_total'] += float(confidence or 0.0)
+    observation_counts = dict(cur.execute("SELECT deployment_id, COUNT(*) FROM camera_observations GROUP BY deployment_id").fetchall())
+    for cell_id, bucket in buckets.items():
+        dep_ids = [row[0] for row in deployment_rows if row[2] is not None and row[3] is not None and f'grid_{round(row[2],2)}_{round(row[3],2)}' == cell_id]
+        observation_count = sum(observation_counts.get(dep_id, 0) for dep_id in dep_ids)
+        cur.execute("""
+        INSERT OR REPLACE INTO coverage_cells
+        (cell_id, grid_type, resolution, source_count, deployment_count, signal_count, observation_count, lead_count, camera_days, image_count,
+         sequence_count, video_count, species_terms, precision_rollup, first_seen, last_seen, confidence_score, created_at, updated_at)
+        VALUES (?, 'latlon_grid', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            cell_id, resolution, len(bucket['sources']), bucket['deployments'], bucket['signals'], observation_count, bucket['leads'], bucket['camera_days'],
+            bucket['image_count'], bucket['sequence_count'], bucket['video_count'], json.dumps(sorted(bucket['species_terms'])),
+            json.dumps(bucket['precision_rollup'], sort_keys=True), bucket['first_seen'], bucket['last_seen'],
+            bucket['confidence_total'] / max(bucket['deployments'] + bucket['signals'] + bucket['leads'], 1), utc_today(), utc_today()
+        ))
+    conn.commit()
+
+def build_location_index(db_path, include_open_dbs=True, include_personal=True, include_social=True,
+                         db_config_path=DEFAULT_DB_CONFIG, personal_config_path=DEFAULT_PERSONAL_SOURCES_CONFIG,
+                         social_config_path=DEFAULT_SOCIAL_SOURCES_CONFIG):
+    '''
+    Build or update the unified location index.
+    '''
+    init_location_index(db_path)
+    conn = sqlite3.connect(db_path)
+    if include_open_dbs and os.path.exists(db_config_path):
+        upsert_location_records(conn, normalize_open_db_locations(db_config_path, DEFAULT_CACHE_DIR))
+    if include_personal and os.path.exists(personal_config_path):
+        upsert_location_records(conn, normalize_personal_locations(DEFAULT_PERSONAL_CACHE_DIR, personal_config_path))
+    if include_social and os.path.exists(social_config_path):
+        upsert_location_records(conn, normalize_social_locations(DEFAULT_SOCIAL_CACHE_DIR, social_config_path))
+    rebuild_coverage_cells(conn, 2)
+    conn.close()
+
+def import_manual_location_leads(db_path, csv_path):
+    '''
+    Import manual creator leads and broad location signals from CSV.
+    '''
+    init_location_index(db_path)
+    conn = sqlite3.connect(db_path)
+    records = {'sources': [], 'deployments': [], 'observations': [], 'signals': [], 'leads': []}
+    source_id = 'manual_leads'
+    records['sources'].append({
+        'source_id': source_id,
+        'source_type': 'manual',
+        'platform': 'manual',
+        'display_name': 'Manual Leads',
+        'base_url': '',
+        'source_config_path': csv_path,
+        'license_status': 'unknown_contact_required',
+        'permission_status': 'not_requested',
+        'priority': 'medium',
+        'notes': 'Imported from manual CSV'
+    })
+    with open(csv_path, newline='', encoding='utf-8') as handle:
+        for row in csv.DictReader(handle):
+            location_text = row.get('location_text', '')
+            resolved = resolve_broad_location(location_text)
+            species_terms = [term.strip() for term in (row.get('species_terms', '') or '').split(',') if term.strip()]
+            lead = {
+                'lead_id': stable_id(source_id, row.get('name'), row.get('url')),
+                'source_id': source_id,
+                'platform': row.get('platform', 'manual'),
+                'creator_handle': row.get('name', ''),
+                'creator_display_name': row.get('name', ''),
+                'profile_url': row.get('url', ''),
+                'contact_path': row.get('contact_path', ''),
+                'source_type': row.get('type', 'manual'),
+                'location_label': location_text,
+                'admin_state': resolved.get('admin_state', ''),
+                'admin_county': resolved.get('admin_county', ''),
+                'admin_place': resolved.get('admin_place', ''),
+                'species_terms': species_terms,
+                'sample_urls': [row.get('url', '')] if row.get('url') else [],
+                'post_count_seen': 1,
+                'media_count_seen': 1,
+                'video_count_seen': 0,
+                'license_status': 'unknown_contact_required',
+                'permission_status': 'not_requested',
+                'review_status': 'candidate',
+                'notes': row.get('notes', '')
+            }
+            lead['lead_score'] = score_creator_lead(lead)
+            lead['priority'] = priority_for_lead_score(lead['lead_score'])
+            records['leads'].append(lead)
+            records['signals'].append({
+                'signal_id': stable_id(source_id, row.get('name'), location_text, 'signal'),
+                'source_id': source_id,
+                'signal_type': 'manual_location',
+                'raw_text': location_text,
+                'normalized_label': resolved.get('location_label', location_text),
+                'latitude': resolved.get('latitude'),
+                'longitude': resolved.get('longitude'),
+                'coordinate_precision': resolved.get('coordinate_precision', 'unknown'),
+                'admin_country': resolved.get('admin_country', ''),
+                'admin_state': resolved.get('admin_state', ''),
+                'admin_county': resolved.get('admin_county', ''),
+                'admin_place': resolved.get('admin_place', ''),
+                'page_url': row.get('url', ''),
+                'post_url': row.get('url', ''),
+                'creator_id': lead['lead_id'],
+                'species_terms': species_terms,
+                'confidence_score': resolved.get('confidence_score', 0.0)
+            })
+    upsert_location_records(conn, records)
+    rebuild_coverage_cells(conn, 2)
+    conn.close()
+
+def export_leads_csv(db_path, output_path, place=None, radius_miles=None, review_status=None):
+    '''
+    Export creator leads from the location index.
+    '''
+    conn = sqlite3.connect(db_path)
+    cur = conn.cursor()
+    rows = cur.execute("""
+    SELECT lead_id, source_id, platform, creator_handle, creator_display_name, profile_url, contact_path, source_type,
+           location_label, admin_state, admin_county, admin_place, species_terms, sample_urls, post_count_seen, media_count_seen,
+           video_count_seen, license_status, permission_status, review_status, lead_score, priority, notes
+    FROM creator_leads
+    ORDER BY lead_score DESC, creator_display_name
+    """).fetchall()
+    resolved = resolve_broad_location(place) if place else None
+    exported = []
+    for row in rows:
+        if review_status and row[19] != review_status:
+            continue
+        if resolved and radius_miles is not None:
+            lead_resolved = resolve_broad_location(row[8] or ', '.join(part for part in (row[11], row[10], row[9]) if part))
+            if lead_resolved.get('latitude') is None or haversine_miles(resolved['latitude'], resolved['longitude'], lead_resolved['latitude'], lead_resolved['longitude']) > radius_miles:
+                continue
+        exported.append({
+            'lead_id': row[0], 'source_id': row[1], 'platform': row[2], 'creator_handle': row[3], 'creator_display_name': row[4],
+            'profile_url': row[5], 'contact_path': row[6], 'source_type': row[7], 'location_label': row[8], 'admin_state': row[9],
+            'admin_county': row[10], 'admin_place': row[11], 'species_terms': '|'.join(safe_json_loads(row[12], [])),
+            'sample_urls': '|'.join(safe_json_loads(row[13], [])), 'post_count_seen': row[14], 'media_count_seen': row[15],
+            'video_count_seen': row[16], 'license_status': row[17], 'permission_status': row[18], 'review_status': row[19],
+            'lead_score': row[20], 'priority': row[21], 'notes': row[22]
+        })
+    write_csv(output_path, ['lead_id', 'source_id', 'platform', 'creator_handle', 'creator_display_name', 'profile_url', 'contact_path', 'source_type', 'location_label', 'admin_state', 'admin_county', 'admin_place', 'species_terms', 'sample_urls', 'post_count_seen', 'media_count_seen', 'video_count_seen', 'license_status', 'permission_status', 'review_status', 'lead_score', 'priority', 'notes'], exported)
+    conn.close()
+
+def set_creator_lead_status(db_path, lead_id, status):
+    '''
+    Update lead review status.
+    '''
+    allowed = {'candidate', 'reviewed', 'not_relevant', 'contacted', 'permission_denied', 'permission_obtained', 'ingested'}
+    if status not in allowed:
+        raise ConfigError(f'Invalid lead status: {status}')
+    conn = sqlite3.connect(db_path)
+    cur = conn.cursor()
+    cur.execute("UPDATE creator_leads SET review_status = ?, updated_at = ? WHERE lead_id = ?", (status, utc_today(), lead_id))
+    if cur.rowcount == 0:
+        conn.close()
+        raise ConfigError(f'Lead not found: {lead_id}')
+    conn.commit()
+    conn.close()
+
+def serve_local_map(port, host='127.0.0.1'):
+    '''
+    Serve the local map UI and repository data over a simple HTTP server.
+    '''
+    root_dir = Path(__file__).resolve().parent
+
+    class MapHandler(http.server.SimpleHTTPRequestHandler):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, directory=str(root_dir), **kwargs)
+
+        def do_GET(self):
+            if self.path in ('/', '/index.html'):
+                self.path = '/web/index.html'
+            return super().do_GET()
+
+        def end_headers(self):
+            self.send_header('Cache-Control', 'no-store, max-age=0')
+            self.send_header('Pragma', 'no-cache')
+            self.send_header('Expires', '0')
+            return super().end_headers()
+
+    class ReusableTCPServer(socketserver.TCPServer):
+        allow_reuse_address = True
+
+    with ReusableTCPServer((host, port), MapHandler) as httpd:
+        log.info(f'Local map available at http://{host}:{port}/')
+        try:
+            httpd.serve_forever()
+        except KeyboardInterrupt:
+            log.info('Stopping local map server.')
+
+def export_locations_geojson(db_path, output_path):
+    '''
+    Export privacy-safe deployment points to GeoJSON.
+    '''
+    conn = sqlite3.connect(db_path)
+    cur = conn.cursor()
+    deployment_rows = cur.execute("""
+    SELECT d.deployment_id, d.source_id, s.source_type, s.platform, s.display_name, d.latitude, d.longitude, d.coordinate_precision,
+           d.coordinate_public, d.coordinate_obfuscated, d.image_count, d.sequence_count, d.video_count, d.camera_days, d.species_terms,
+           d.admin_state, d.admin_county, d.location_label, d.license_status, d.permission_status, d.confidence_score
+    FROM camera_deployments d JOIN camera_sources s ON d.source_id = s.source_id
+    """).fetchall()
+    signal_rows = cur.execute("""
+    SELECT g.signal_id, g.source_id, s.source_type, s.platform, s.display_name, g.latitude, g.longitude, g.coordinate_precision,
+           g.signal_type, g.raw_text, g.normalized_label, g.species_terms, g.admin_state, g.admin_county, g.admin_place, g.confidence_score
+    FROM location_signals g JOIN camera_sources s ON g.source_id = s.source_id
+    """).fetchall()
+    features = []
+    for row in deployment_rows:
+        if row[5] is None or row[6] is None:
+            continue
+        features.append({
+            'type': 'Feature',
+            'geometry': {'type': 'Point', 'coordinates': [row[6], row[5]]},
+            'properties': {
+                'record_type': 'deployment',
+                'deployment_id': row[0], 'source_id': row[1], 'source_type': row[2], 'platform': row[3], 'display_name': row[4],
+                'coordinate_precision': row[7], 'coordinate_public': bool(row[8]), 'coordinate_obfuscated': bool(row[9]),
+                'image_count': row[10], 'sequence_count': row[11], 'video_count': row[12], 'camera_days': row[13],
+                'species_terms': safe_json_loads(row[14], []), 'admin_state': row[15], 'admin_county': row[16],
+                'location_label': row[17], 'license_status': row[18], 'permission_status': row[19], 'confidence_score': row[20]
+            }
+        })
+    for row in signal_rows:
+        if row[5] is None or row[6] is None:
+            continue
+        features.append({
+            'type': 'Feature',
+            'geometry': {'type': 'Point', 'coordinates': [row[6], row[5]]},
+            'properties': {
+                'record_type': 'signal',
+                'signal_id': row[0], 'source_id': row[1], 'source_type': row[2], 'platform': row[3], 'display_name': row[4],
+                'coordinate_precision': row[7], 'signal_type': row[8], 'raw_text': row[9], 'location_label': row[10],
+                'species_terms': safe_json_loads(row[11], []), 'admin_state': row[12], 'admin_county': row[13],
+                'admin_place': row[14], 'confidence_score': row[15]
+            }
+        })
+    write_json(output_path, {'type': 'FeatureCollection', 'features': features})
+    conn.close()
+
+def grid_polygon(lat, lon, step=0.01):
+    '''
+    Build a fallback square polygon around a grid centroid.
+    '''
+    return [[
+        [lon - step, lat - step], [lon + step, lat - step], [lon + step, lat + step],
+        [lon - step, lat + step], [lon - step, lat - step]
+    ]]
+
+def export_h3_coverage_geojson(db_path, output_path, resolution):
+    '''
+    Export fallback grid coverage GeoJSON.
+    '''
+    conn = sqlite3.connect(db_path)
+    cur = conn.cursor()
+    rows = cur.execute("""
+    SELECT cell_id, grid_type, resolution, source_count, deployment_count, signal_count, observation_count, lead_count, camera_days, image_count,
+           sequence_count, video_count, species_terms, precision_rollup, first_seen, last_seen, confidence_score
+    FROM coverage_cells
+    """).fetchall()
+    features = []
+    for row in rows:
+        cell_id = row[0]
+        parts = cell_id.split('_')
+        lat = float(parts[1])
+        lon = float(parts[2])
+        features.append({
+            'type': 'Feature',
+            'geometry': {'type': 'Polygon', 'coordinates': grid_polygon(lat, lon)},
+            'properties': {
+                'cell_id': row[0], 'grid_type': row[1], 'resolution': row[2], 'source_count': row[3],
+                'deployment_count': row[4], 'signal_count': row[5], 'observation_count': row[6], 'lead_count': row[7],
+                'camera_days': row[8], 'image_count': row[9], 'sequence_count': row[10], 'video_count': row[11],
+                'species_terms': safe_json_loads(row[12], []), 'precision_rollup': safe_json_loads(row[13], {}),
+                'first_seen': row[14], 'last_seen': row[15], 'confidence_score': row[16]
+            }
+        })
+    write_json(output_path, {'type': 'FeatureCollection', 'features': features})
+    conn.close()
+
+def export_admin_rollups(db_path, county_path, state_path):
+    '''
+    Export county and state rollups.
+    '''
+    conn = sqlite3.connect(db_path)
+    cur = conn.cursor()
+    county_rows = []
+    county_stats = {}
+    for row in cur.execute("""
+    SELECT admin_state, admin_county, COUNT(*), SUM(image_count), SUM(video_count), AVG(confidence_score), GROUP_CONCAT(species_terms, '|'), GROUP_CONCAT(DISTINCT coordinate_precision)
+    FROM camera_deployments WHERE admin_county != '' GROUP BY admin_state, admin_county
+    """):
+        county_stats[(row[0], row[1])] = {
+            'state': row[0], 'county': row[1], 'deployment_count': row[2], 'signal_count': 0, 'observation_count': 0, 'lead_count': 0,
+            'image_count': row[3] or 0, 'video_count': row[4] or 0, 'species_terms': '|'.join(merge_species_blobs(row[6])),
+            'precision_rollup': row[7] or '', 'confidence_avg': round(row[5] or 0.0, 3)
+        }
+    for row in cur.execute("SELECT admin_state, admin_county, COUNT(*) FROM location_signals WHERE admin_county != '' GROUP BY admin_state, admin_county"):
+        bucket = county_stats.setdefault((row[0], row[1]), {
+            'state': row[0], 'county': row[1], 'deployment_count': 0, 'signal_count': 0, 'observation_count': 0, 'lead_count': 0,
+            'image_count': 0, 'video_count': 0, 'species_terms': '', 'precision_rollup': '', 'confidence_avg': 0.0
+        })
+        bucket['signal_count'] += row[2]
+    for row in cur.execute("""
+    SELECT d.admin_state, d.admin_county, COUNT(o.observation_id)
+    FROM camera_deployments d JOIN camera_observations o ON d.deployment_id = o.deployment_id
+    WHERE d.admin_county != '' GROUP BY d.admin_state, d.admin_county
+    """):
+        bucket = county_stats.setdefault((row[0], row[1]), {
+            'state': row[0], 'county': row[1], 'deployment_count': 0, 'signal_count': 0, 'observation_count': 0, 'lead_count': 0,
+            'image_count': 0, 'video_count': 0, 'species_terms': '', 'precision_rollup': '', 'confidence_avg': 0.0
+        })
+        bucket['observation_count'] += row[2]
+    for row in cur.execute("SELECT admin_state, admin_county, COUNT(*) FROM creator_leads WHERE admin_county != '' GROUP BY admin_state, admin_county"):
+        bucket = county_stats.setdefault((row[0], row[1]), {
+            'state': row[0], 'county': row[1], 'deployment_count': 0, 'signal_count': 0, 'observation_count': 0, 'lead_count': 0,
+            'image_count': 0, 'video_count': 0, 'species_terms': '', 'precision_rollup': '', 'confidence_avg': 0.0
+        })
+        bucket['lead_count'] += row[2]
+    for bucket in county_stats.values():
+        county_rows.append({
+            'state': bucket['state'], 'county': bucket['county'], 'deployment_count': bucket['deployment_count'], 'signal_count': bucket['signal_count'],
+            'observation_count': bucket['observation_count'], 'lead_count': bucket['lead_count'], 'image_count': bucket['image_count'],
+            'video_count': bucket['video_count'], 'species_terms': bucket['species_terms'], 'precision_rollup': bucket['precision_rollup'],
+            'confidence_avg': bucket['confidence_avg']
+        })
+    state_rows = []
+    state_stats = {}
+    for row in county_rows:
+        bucket = state_stats.setdefault(row['state'], {
+            'state': row['state'], 'deployment_count': 0, 'signal_count': 0, 'observation_count': 0, 'lead_count': 0,
+            'image_count': 0, 'video_count': 0, 'species_terms': set(), 'precision_rollup': set(), 'confidence_total': 0.0, 'confidence_count': 0
+        })
+        bucket['deployment_count'] += row['deployment_count']
+        bucket['signal_count'] += row['signal_count']
+        bucket['observation_count'] += row['observation_count']
+        bucket['lead_count'] += row['lead_count']
+        bucket['image_count'] += row['image_count']
+        bucket['video_count'] += row['video_count']
+        bucket['species_terms'].update(filter(None, row['species_terms'].split('|')))
+        bucket['precision_rollup'].update(filter(None, row['precision_rollup'].split(',')))
+        bucket['confidence_total'] += row['confidence_avg']
+        bucket['confidence_count'] += 1
+    for bucket in state_stats.values():
+        state_rows.append({
+            'state': bucket['state'], 'deployment_count': bucket['deployment_count'], 'signal_count': bucket['signal_count'],
+            'observation_count': bucket['observation_count'], 'lead_count': bucket['lead_count'], 'image_count': bucket['image_count'],
+            'video_count': bucket['video_count'], 'species_terms': '|'.join(sorted(bucket['species_terms'])),
+            'precision_rollup': ','.join(sorted(bucket['precision_rollup'])),
+            'confidence_avg': round(bucket['confidence_total'] / max(bucket['confidence_count'], 1), 3)
+        })
+    write_csv(county_path, ['state', 'county', 'deployment_count', 'signal_count', 'observation_count', 'lead_count', 'image_count', 'video_count', 'species_terms', 'precision_rollup', 'confidence_avg'], county_rows)
+    write_csv(state_path, ['state', 'deployment_count', 'signal_count', 'observation_count', 'lead_count', 'image_count', 'video_count', 'species_terms', 'precision_rollup', 'confidence_avg'], state_rows)
+    conn.close()
+
+def generate_coverage_report(db_path, output_path):
+    '''
+    Generate a global markdown coverage report.
+    '''
+    conn = sqlite3.connect(db_path)
+    cur = conn.cursor()
+    source_rows = cur.execute("""
+    SELECT s.source_type, COUNT(DISTINCT s.source_id), COUNT(DISTINCT d.deployment_id), COUNT(DISTINCT g.signal_id),
+           COUNT(o.observation_id), COUNT(DISTINCT l.lead_id), SUM(d.image_count), SUM(d.video_count), AVG(d.confidence_score)
+    FROM camera_sources s
+    LEFT JOIN camera_deployments d ON s.source_id = d.source_id
+    LEFT JOIN location_signals g ON s.source_id = g.source_id
+    LEFT JOIN camera_observations o ON d.deployment_id = o.deployment_id
+    LEFT JOIN creator_leads l ON s.source_id = l.source_id
+    GROUP BY s.source_type
+    """).fetchall()
+    precision_rows = cur.execute("""
+    SELECT 'deployment', coordinate_precision, COUNT(*), SUM(image_count) FROM camera_deployments GROUP BY coordinate_precision
+    UNION ALL
+    SELECT 'signal', coordinate_precision, COUNT(*), 0 FROM location_signals GROUP BY coordinate_precision
+    """).fetchall()
+    state_rows = cur.execute("SELECT admin_state, COUNT(*), SUM(image_count), AVG(confidence_score) FROM camera_deployments WHERE admin_state != '' GROUP BY admin_state ORDER BY COUNT(*) DESC LIMIT 10").fetchall()
+    county_rows = cur.execute("SELECT admin_state, admin_county, COUNT(*), SUM(image_count), AVG(confidence_score) FROM camera_deployments WHERE admin_county != '' GROUP BY admin_state, admin_county ORDER BY COUNT(*) DESC LIMIT 10").fetchall()
+    lead_status_rows = cur.execute("SELECT review_status, COUNT(*), AVG(lead_score) FROM creator_leads GROUP BY review_status ORDER BY COUNT(*) DESC").fetchall()
+    total_dep = sum(row[2] for row in precision_rows) or 1
+    fov = calculate_direct_fov_area()
+    lines = [
+        '# Trail-Cam Coverage Report', '', '## Summary', '',
+        f'Total sources: {cur.execute("SELECT COUNT(*) FROM camera_sources").fetchone()[0]}',
+        f'Total deployments: {cur.execute("SELECT COUNT(*) FROM camera_deployments").fetchone()[0]}',
+        f'Total location signals: {cur.execute("SELECT COUNT(*) FROM location_signals").fetchone()[0]}',
+        f'Total observations: {cur.execute("SELECT COUNT(*) FROM camera_observations").fetchone()[0]}',
+        f'Total creator leads: {cur.execute("SELECT COUNT(*) FROM creator_leads").fetchone()[0]}', '',
+        '## Source Breakdown', '', 'source_type | sources | deployments | signals | observations | leads | image_count | video_count | confidence_avg',
+        '--- | --- | --- | --- | --- | --- | --- | --- | ---'
+    ]
+    for row in source_rows:
+        lines.append(f'{row[0]} | {row[1] or 0} | {row[2] or 0} | {row[3] or 0} | {row[4] or 0} | {row[5] or 0} | {row[6] or 0} | {row[7] or 0} | {round(row[8] or 0.0, 3)}')
+    lines.extend(['', '## Location Precision', '', 'record_type | coordinate_precision | count | image_count | percent', '--- | --- | --- | --- | ---'])
+    for row in precision_rows:
+        lines.append(f'{row[0]} | {row[1]} | {row[2]} | {row[3] or 0} | {round((row[2] / total_dep) * 100, 1)}%')
+    lines.extend(['', '## Lead Pipeline', '', 'review_status | lead_count | avg_score', '--- | --- | ---'])
+    for row in lead_status_rows:
+        lines.append(f'{row[0]} | {row[1]} | {round(row[2] or 0.0, 3)}')
+    lines.extend(['', '## Top States', '', 'state | deployments | image_count | confidence_avg', '--- | --- | --- | ---'])
+    for row in state_rows:
+        lines.append(f'{row[0]} | {row[1]} | {row[2] or 0} | {round(row[3] or 0.0, 3)}')
+    lines.extend(['', '## Top Counties', '', 'state | county | deployments | image_count | confidence_avg', '--- | --- | --- | --- | ---'])
+    for row in county_rows:
+        lines.append(f'{row[0]} | {row[1]} | {row[2]} | {row[3] or 0} | {round(row[4] or 0.0, 3)}')
+    lines.extend(['', '## Aggregate FOV Estimate', '', f'Estimated effective area per camera: {round(fov["effective_area_acres"], 3)} acres', '', '## Gaps', '', '- unknown coordinates', '- location_id_only datasets', '- state-only social leads', '- county-only personal leads', '', '## Caveats', '', '- Coverage maps show confirmed deployments, broad location signals, and leads.', '- County/state/social points are not exact trail-camera locations.', '- Exact private locations are never inferred.', '', '## Recommended Acquisition Targets', '', '- Prioritize regions with many broad leads but few exact/fuzzed public deployments.', ''])
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    Path(output_path).write_text('\n'.join(lines), encoding='utf-8')
+    conn.close()
+
+def generate_place_coverage_report(db_path, place, radius_miles, output_path):
+    '''
+    Generate a place/radius markdown report.
+    '''
+    resolved = resolve_broad_location(place)
+    conn = sqlite3.connect(db_path)
+    cur = conn.cursor()
+    deployment_rows = cur.execute("SELECT coordinate_precision, latitude, longitude, admin_state, admin_county, admin_place, location_label, species_terms FROM camera_deployments").fetchall()
+    signal_rows = cur.execute("SELECT coordinate_precision, latitude, longitude, admin_state, admin_county, admin_place, normalized_label, species_terms FROM location_signals").fetchall()
+    lead_rows = cur.execute("SELECT location_label, admin_state, admin_county, admin_place, species_terms FROM creator_leads").fetchall()
+    exact = fuzzed = broad = lead_count = 0
+    species = set()
+    place_tokens = [token.lower() for token in (resolved.get('admin_place', ''), resolved.get('admin_county', ''), resolved.get('admin_state', ''), place) if token]
+    for row in deployment_rows:
+        precision, lat, lon, state, county, admin_place, label, species_terms = row
+        if precision in ('exact_public', 'fuzzed_public', 'project_centroid', 'park_or_public_land_centroid') and lat is not None and lon is not None:
+            dist = haversine_miles(resolved['latitude'], resolved['longitude'], lat, lon)
+            if dist is not None and dist <= radius_miles:
+                if precision == 'exact_public':
+                    exact += 1
+                else:
+                    fuzzed += 1
+                species.update(safe_json_loads(species_terms, []))
+    for row in signal_rows:
+        precision, lat, lon, state, county, admin_place, label, species_terms = row
+        in_radius = lat is not None and lon is not None and haversine_miles(resolved['latitude'], resolved['longitude'], lat, lon) <= radius_miles
+        text = ' '.join(part for part in (state, county, admin_place, label) if part).lower()
+        if in_radius or any(token in text for token in place_tokens):
+            broad += 1
+            species.update(safe_json_loads(species_terms, []))
+    for label, state, county, admin_place, species_terms in lead_rows:
+        text = ' '.join(part for part in (label, state, county, admin_place) if part).lower()
+        if any(token in text for token in place_tokens):
+            lead_count += 1
+            species.update(safe_json_loads(species_terms, []))
+    confidence = 'Low'
+    if exact + fuzzed >= 5:
+        confidence = 'High'
+    elif broad + lead_count >= 5:
+        confidence = 'Medium'
+    lines = [
+        f'# Trail-Cam Coverage Near {place}', '', f'Radius: {radius_miles} miles', '', '## Summary', '',
+        f'Exact public camera deployments within {radius_miles} miles: {exact}',
+        f'Fuzzed public deployments within {radius_miles} miles: {fuzzed}',
+        f'Broad location signals intersecting radius: {broad}',
+        f'Creator leads: {lead_count}',
+        f'Coverage confidence: {confidence}', '',
+        '## Species/Event Terms', '', ', '.join(sorted(species)) if species else 'None', '',
+        '## Interpretation', '', '- Confirmed deployments are separate from broad location signals.', '- Broad signals indicate likely local camera activity but not exact placement.', '- Creator leads are outreach candidates, not confirmed deployments.', ''
+    ]
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    Path(output_path).write_text('\n'.join(lines), encoding='utf-8')
+    cur.execute("""
+    INSERT OR REPLACE INTO coverage_reports
+    (report_id, report_type, place_name, latitude, longitude, radius_miles, report_path, summary_json, created_at)
+    VALUES (?, 'place_radius', ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        stable_id(place, radius_miles), place, resolved['latitude'], resolved['longitude'], radius_miles, output_path,
+        json.dumps({'exact': exact, 'fuzzed': fuzzed, 'broad': broad, 'creator_leads': lead_count, 'confidence': confidence}, sort_keys=True),
+        utc_today()
+    ))
+    conn.commit()
+    conn.close()
+
 def http_fetch(url, method='GET', timeout=DEFAULT_TIMEOUT_SEC, user_agent=None, headers=None, max_bytes=None):
     '''
     Fetch a URL using stdlib urllib.
@@ -2068,6 +3277,27 @@ def handle_args():
     parser.add_argument('--social-source', help='Social source id, or "all" for every source.')
     parser.add_argument('--social-manual-seeds', default=DEFAULT_SOCIAL_MANUAL_SEEDS, help='Path to social manual review seeds CSV.')
     parser.add_argument('--db', help='Database id to operate on. Default is all databases.')
+    parser.add_argument('--build-location-index', action='store_true', help='Build the unified trail-cam location index.')
+    parser.add_argument('--location-index', default=f'{DEFAULT_COVERAGE_DIR}/trailcam_location_index.sqlite', help='Path to the SQLite location index.')
+    parser.add_argument('--include-open-dbs', action='store_true', help='Include open/institutional DBs in the location index.')
+    parser.add_argument('--include-personal', action='store_true', help='Include personal-source cache in the location index.')
+    parser.add_argument('--include-social', action='store_true', help='Include social-source cache in the location index.')
+    parser.add_argument('--export-geojson', help='Write location points GeoJSON to this path.')
+    parser.add_argument('--export-h3-coverage', help='Write H3/grid coverage GeoJSON to this path.')
+    parser.add_argument('--h3-resolution', type=int, default=7, help='Requested H3 resolution; fallback grid uses a fixed lat/lon grid.')
+    parser.add_argument('--serve-map', action='store_true', help='Host the local camera map UI.')
+    parser.add_argument('--map-port', type=int, default=8765, help='Port for --serve-map.')
+    parser.add_argument('--export-admin-rollups', action='store_true', help='Write county/state rollup CSVs.')
+    parser.add_argument('--county-rollup', default=f'{DEFAULT_COVERAGE_DIR}/trailcam_county_rollup.csv', help='County rollup CSV path.')
+    parser.add_argument('--state-rollup', default=f'{DEFAULT_COVERAGE_DIR}/trailcam_state_rollup.csv', help='State rollup CSV path.')
+    parser.add_argument('--coverage-report', help='Write a global coverage markdown report.')
+    parser.add_argument('--coverage-place', help='Generate a place/radius coverage report for this place name.')
+    parser.add_argument('--radius-miles', type=float, default=25.0, help='Radius in miles for --coverage-place.')
+    parser.add_argument('--coverage-place-report', help='Write the place/radius coverage markdown report to this path.')
+    parser.add_argument('--lead-status', help='Optional creator lead review-status filter for location exports.')
+    parser.add_argument('--lead-id', help='Creator lead id to update.')
+    parser.add_argument('--set-lead-status', help='New review status for --lead-id.')
+    parser.add_argument('--import-manual-leads', help='Import manual location leads from CSV.')
     parser.add_argument('--init-creds', action='store_true', help='Create a local credentials template and exit.')
     parser.add_argument('--check', action='store_true', help='Access configured DB URLs and determine credential requirements.')
     parser.add_argument('--validate-personal-config', action='store_true', help='Validate the personal-source config file.')
@@ -2085,7 +3315,7 @@ def handle_args():
     parser.add_argument('--force-download', action='store_true', help='Re-download metadata even if cached.')
     parser.add_argument('--find', nargs='+', help='Search terms. All terms must match within an item for structured sources.')
     parser.add_argument('--limit', type=int, default=20, help='Maximum search results per database.')
-    parser.add_argument('--export-leads', help='Write personal source leads to this CSV path.')
+    parser.add_argument('--export-leads', help='Write personal leads or location creator leads to this CSV path.')
     parser.add_argument('--export-results', help='Write personal search results to this CSV path.')
     parser.add_argument('--export-social-leads', help='Write social discovery leads to this CSV path.')
     parser.add_argument('--export-social-results', help='Write social search results to this CSV path.')
@@ -2107,12 +3337,17 @@ def handle_args():
     if not any([
         args.init_creds, args.check, args.validate_personal_config, args.check_personal,
         args.discover, args.validate_social_config, args.check_social, args.discover_social,
-        args.import_manual_seeds, args.scan_dbs, args.map, args.list_api, args.metadata_extract,
+        args.import_manual_seeds, args.build_location_index, args.export_geojson, args.export_h3_coverage,
+        args.serve_map, args.export_admin_rollups, args.coverage_report, args.coverage_place, args.import_manual_leads,
+        args.lead_id and args.set_lead_status,
+        args.scan_dbs, args.map, args.list_api, args.metadata_extract,
         args.find, args.export_leads, args.export_social_leads
     ]):
-        parser.error('Choose one action: --init-creds, --check, --validate-personal-config, --check-personal, --discover, --validate-social-config, --check-social, --discover-social, --import-manual-seeds, --scan-dbs, --map, --list-api, --metadata-extract, --export-leads, --export-social-leads, or --find')
+        parser.error('Choose one action: --init-creds, --check, --validate-personal-config, --check-personal, --discover, --validate-social-config, --check-social, --discover-social, --import-manual-seeds, --build-location-index, --export-geojson, --export-h3-coverage, --export-admin-rollups, --coverage-report, --coverage-place, --import-manual-leads, --lead-id/--set-lead-status, --scan-dbs, --map, --list-api, --metadata-extract, --export-leads, --export-social-leads, or --find')
     if args.metadata_extract and not args.db:
         parser.error('--metadata-extract requires --db')
+    if bool(args.lead_id) != bool(args.set_lead_status):
+        parser.error('--lead-id and --set-lead-status must be used together')
     if args.personal_source and not any([args.find]):
         log.debug('Ignoring --personal-source without a personal search action.')
 
@@ -2133,8 +3368,39 @@ def main():
     Entrypoint.
     '''
     args = handle_args()
+    location_export_leads = bool(args.export_leads and ('trailcam_coverage' in args.export_leads or any([args.build_location_index, args.export_geojson, args.export_h3_coverage, args.export_admin_rollups, args.coverage_report, args.coverage_place, args.import_manual_leads, args.lead_id, args.set_lead_status, args.lead_status, args.serve_map])))
+    location_mode = any([args.build_location_index, args.export_geojson, args.export_h3_coverage, args.serve_map, args.export_admin_rollups, args.coverage_report, args.coverage_place, args.import_manual_leads, args.lead_id and args.set_lead_status, location_export_leads])
     social_mode = any([args.validate_social_config, args.check_social, args.discover_social, args.export_social_leads, args.import_manual_seeds]) or (args.social_source and args.find)
-    personal_mode = any([args.validate_personal_config, args.check_personal, args.discover, args.export_leads]) or (args.personal_source and args.find)
+    personal_mode = any([args.validate_personal_config, args.check_personal, args.discover, args.export_leads and not location_export_leads]) or (args.personal_source and args.find)
+
+    if location_mode:
+        include_open = args.include_open_dbs
+        include_personal = args.include_personal
+        include_social = args.include_social
+        if args.build_location_index and not any([include_open, include_personal, include_social]):
+            include_open = include_personal = include_social = True
+        if args.build_location_index:
+            build_location_index(args.location_index, include_open, include_personal, include_social)
+        if args.export_geojson:
+            export_locations_geojson(args.location_index, args.export_geojson)
+        if args.export_h3_coverage:
+            export_h3_coverage_geojson(args.location_index, args.export_h3_coverage, args.h3_resolution)
+        if args.export_admin_rollups:
+            export_admin_rollups(args.location_index, args.county_rollup, args.state_rollup)
+        if args.coverage_report:
+            generate_coverage_report(args.location_index, args.coverage_report)
+        if args.coverage_place:
+            report_path = args.coverage_place_report or f'{DEFAULT_COVERAGE_DIR}/reports/{safe_filename(args.coverage_place)}_{int(args.radius_miles)}mi.md'
+            generate_place_coverage_report(args.location_index, args.coverage_place, args.radius_miles, report_path)
+        if args.import_manual_leads:
+            import_manual_location_leads(args.location_index, args.import_manual_leads)
+        if location_export_leads:
+            export_leads_csv(args.location_index, args.export_leads, args.coverage_place, args.radius_miles if args.coverage_place else None, args.lead_status)
+        if args.lead_id and args.set_lead_status:
+            set_creator_lead_status(args.location_index, args.lead_id, args.set_lead_status)
+        if args.serve_map:
+            serve_local_map(args.map_port)
+        return
 
     if social_mode:
         social_config = load_social_sources_config(args.social_sources)

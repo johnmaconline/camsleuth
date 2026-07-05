@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CamSleuth Map</title>
+  <link rel="preconnect" href="https://tile.openstreetmap.org">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+  <link rel="stylesheet" href="/web/style.css">
+</head>
+<body>
+  <div class="shell">
+    <aside class="panel">
+      <div class="panel-head">
+        <p class="eyebrow">CamSleuth</p>
+        <h1>Camera Map</h1>
+        <p class="lede">Plot candidate cameras, inspect indexed locations, and keep local planning markers in your browser.</p>
+      </div>
+      <div class="card stats">
+        <div>
+          <span class="label">Deployments</span>
+          <strong id="deployment-count">0</strong>
+        </div>
+        <div>
+          <span class="label">Signals</span>
+          <strong id="signal-count">0</strong>
+        </div>
+        <div>
+          <span class="label">Plotted</span>
+          <strong id="planned-count">0</strong>
+        </div>
+      </div>
+      <div class="card controls">
+        <label class="toggle"><input id="show-deployments" type="checkbox" checked> Confirmed deployments</label>
+        <label class="toggle"><input id="show-signals" type="checkbox" checked> Broad signals</label>
+        <label class="toggle"><input id="show-planned" type="checkbox" checked> Planned cameras</label>
+        <button id="fit-all" type="button">Fit All Data</button>
+        <button id="export-planned" type="button">Export Planned Cameras</button>
+        <button id="clear-planned" type="button" class="danger">Clear Planned Cameras</button>
+      </div>
+      <div class="card instructions">
+        <h2>How it works</h2>
+        <p>Click the map to add a planned camera. Existing GeoJSON from <code>trailcam_coverage/trailcam_locations.geojson</code> is loaded automatically.</p>
+      </div>
+      <div class="card list-card">
+        <div class="list-head">
+          <h2>Planned Cameras</h2>
+          <span id="list-summary">0 saved</span>
+        </div>
+        <div id="planned-list" class="planned-list"></div>
+      </div>
+    </aside>
+    <main class="map-wrap">
+      <div id="map"></div>
+    </main>
+  </div>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="/web/app.js"></script>
+</body>
+</html>

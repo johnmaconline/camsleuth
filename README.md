@@ -46,6 +46,28 @@ python3 camsleuth.py --social-sources social_trailcam_sources.json --export-soci
 
 Public social posts are not automatically reusable training data. Use exported leads for outreach. Ingest original media only when the creator grants permission or the post/license explicitly allows reuse.
 
+## Location Coverage
+
+CamSleuth can build a location index from open datasets, personal sources, social discovery metadata, and manual leads. It tracks coordinate precision explicitly so county/state/social signals are not confused with confirmed camera deployments.
+
+```bash
+python3 camsleuth.py --build-location-index
+python3 camsleuth.py --export-geojson trailcam_coverage/trailcam_locations.geojson
+python3 camsleuth.py --serve-map --map-port 8765
+```
+
+Then open [http://127.0.0.1:8765/](http://127.0.0.1:8765/).
+
+```bash
+python3 camsleuth.py --coverage-place "Oley, PA" --radius-miles 25 --coverage-place-report trailcam_coverage/reports/oley_pa_25mi.md
+python3 camsleuth.py --export-h3-coverage trailcam_coverage/trailcam_h3_coverage.geojson --h3-resolution 7
+python3 camsleuth.py --export-admin-rollups
+python3 camsleuth.py --coverage-report trailcam_coverage/coverage_report.md
+python3 camsleuth.py --export-leads trailcam_coverage/oley_trailcam_leads.csv
+```
+
+Coverage maps show confirmed deployments, broad location signals, and leads. County/state/social points are not exact trail-camera locations. Exact private locations are never inferred.
+
 ## Searching LILA COCO datasets
 
 LILA member datasets usually require downloading large metadata archives first:
