@@ -1,0 +1,83 @@
+{
+  "version": "0.1.0",
+  "description": "Hand-editable catalog of open/public trail-camera and camera-trap data sources. Most entries are static public datasets, not live query APIs.",
+  "defaults": {
+    "cache_dir": "./trailcam_cache",
+    "api_map_dir": "./trailcam_api_maps",
+    "timeout_sec": 30,
+    "user_agent": "camsleuth/0.1 (+https://4tlas.io)"
+  },
+  "databases": [
+    {
+      "id": "lila_catalog",
+      "name": "LILA BC camera-trap catalog",
+      "adapter": "lila_catalog_csv",
+      "homepage_url": "https://lila.science/datasets",
+      "catalog_url": "https://lila.science/wp-content/uploads/2023/06/lila_camera_trap_datasets.csv",
+      "auth": {"type": "none", "required": false},
+      "notes": "Catalog CSV for LILA camera-trap datasets. Use this to discover many more LILA-hosted datasets."
+    },
+    {
+      "id": "caltech_camera_traps",
+      "name": "Caltech Camera Traps",
+      "adapter": "lila_coco_zip",
+      "homepage_url": "https://lila.science/datasets/caltech-camera-traps",
+      "image_base_url": "https://storage.googleapis.com/public-datasets-lila/caltech-unzipped/cct_images",
+      "metadata_url": "https://storage.googleapis.com/public-datasets-lila/caltechcameratraps/labels/caltech_camera_traps.json.zip",
+      "bbox_url": "https://storage.googleapis.com/public-datasets-lila/caltechcameratraps/labels/caltech_bboxes_20200316.json",
+      "auth": {"type": "none", "required": false},
+      "notes": "COCO Camera Traps metadata. About 243k images and 21 animal categories plus empty."
+    },
+    {
+      "id": "nacti",
+      "name": "North American Camera Trap Images / NACTI",
+      "adapter": "lila_coco_zip",
+      "homepage_url": "https://lila.science/datasets/nacti",
+      "image_base_url": "https://storage.googleapis.com/public-datasets-lila/nacti-unzipped",
+      "metadata_url": "https://storage.googleapis.com/public-datasets-lila/nacti/nacti_metadata.1.14.json.zip",
+      "bbox_url": "https://storage.googleapis.com/public-datasets-lila/nacti/nacti_20230920_bboxes.zip",
+      "auth": {"type": "none", "required": false},
+      "notes": "COCO Camera Traps metadata. About 3.7M images from five U.S. locations with species labels."
+    },
+    {
+      "id": "wcs_camera_traps",
+      "name": "WCS Camera Traps",
+      "adapter": "lila_coco_zip",
+      "homepage_url": "https://lila.science/datasets/wcscameratraps",
+      "image_base_url": "https://storage.googleapis.com/public-datasets-lila/wcs-unzipped",
+      "metadata_url": "https://storage.googleapis.com/public-datasets-lila/wcs/wcs_camera_traps.json.zip",
+      "bbox_url": "https://storage.googleapis.com/public-datasets-lila/wcs/wcs_20200403_bboxes.json.zip",
+      "auth": {"type": "none", "required": false},
+      "notes": "COCO Camera Traps metadata. Around 1.4M images from WCS projects."
+    },
+    {
+      "id": "snapshot_serengeti",
+      "name": "Snapshot Serengeti",
+      "adapter": "web_download",
+      "homepage_url": "https://lila.science/datasets/snapshot-serengeti",
+      "metadata_urls": [
+        "https://storage.googleapis.com/public-datasets-lila/snapshotserengeti-v-2-0/zooniverse_metadata/search_effort.csv",
+        "https://lilawildlife.blob.core.windows.net/lila-wildlife/snapshotserengeti-v-2-0/SnapshotSerengeti_S1-11_v2.1.species_list.csv"
+      ],
+      "image_base_url": "https://snapshotserengeti.s3.msi.umn.edu/",
+      "auth": {"type": "none", "required": false},
+      "notes": "Large public Snapshot Serengeti release. Config includes known public metadata files and image base URL. Add more metadata package URLs as needed."
+    },
+    {
+      "id": "wildlife_insights_public",
+      "name": "Wildlife Insights public data downloads",
+      "adapter": "web_page",
+      "homepage_url": "https://www.wildlifeinsights.org/get-started/data-download/public",
+      "auth": {"type": "none_for_public_downloads", "required": false},
+      "notes": "Public downloads are available. Sensitive data can be obscured/removed; sensitive-location access requires project-owner approval. No general public search REST API is declared here."
+    },
+    {
+      "id": "emammal_public",
+      "name": "Smithsonian eMammal browse/download data",
+      "adapter": "web_page",
+      "homepage_url": "https://emammal.si.edu/browse-data",
+      "auth": {"type": "none_for_public_downloads", "required": false},
+      "notes": "Public browse/download site. Some coordinates are fuzzed for sensitive deployments. No general public REST API is declared here."
+    }
+  ]
+}

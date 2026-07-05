@@ -1,0 +1,109 @@
+{
+  "version": 1,
+  "description": "Metadata-only social discovery sources for trail-camera creators, posts, videos, and public references.",
+  "default_rules": {
+    "collection_mode": "metadata_only",
+    "download_media_by_default": false,
+    "respect_robots_txt": true,
+    "allow_logged_in_scraping": false,
+    "allow_private_group_scraping": false,
+    "allow_private_account_scraping": false,
+    "allow_media_download": false,
+    "request_timeout_seconds": 30,
+    "max_results_per_query": 50,
+    "user_agent": "camsleuth/0.1 social metadata discovery"
+  },
+  "sources": [
+    {
+      "source_id": "youtube_trailcam_discovery",
+      "display_name": "YouTube Trail-Cam Discovery",
+      "platform": "youtube",
+      "source_type": "social_video_search",
+      "base_url": "https://www.youtube.com/",
+      "query_terms": ["trail camera", "trail cam", "game cam", "camera trap", "backyard wildlife camera", "trail cam deer", "trail cam bobcat", "trail cam coyote", "trail cam bear", "trail cam Pennsylvania", "Pennsylvania trail cam", "Berks County wildlife", "Oley wildlife"],
+      "collection_mode": "metadata_only",
+      "auth_mode": "public_web_or_official_api",
+      "official_api": {
+        "available": true,
+        "name": "YouTube Data API",
+        "credential_key": "youtube_data_api_key",
+        "required_by_default": false
+      },
+      "allowed_outputs": ["video_url", "channel_url", "channel_name", "title", "description", "published_at", "hashtags", "species_terms", "broad_location", "view_count_if_available", "contact_path"],
+      "media_download_default": false,
+      "license_status": "unknown_contact_required",
+      "permission_status": "not_requested",
+      "priority": "high",
+      "notes": "Best social discovery source for public trail-cam video creators and long-running channels."
+    },
+    {
+      "source_id": "instagram_trailcam_hashtags",
+      "display_name": "Instagram Trail-Cam Hashtag Discovery",
+      "platform": "instagram",
+      "source_type": "social_hashtag_search",
+      "base_url": "https://www.instagram.com/",
+      "query_terms": ["trailcam", "trailcamera", "trailcamphotos", "trailcamvideo", "gamecam", "cameratrap", "wildlifecamera", "backyardwildlife", "deerhunting", "whitetaildeer", "bobcat", "coyote", "bear", "pennsylvaniawildlife", "pawildlife", "berkscounty", "oley"],
+      "collection_mode": "metadata_only",
+      "auth_mode": "official_api_only_or_manual_review",
+      "official_api": {
+        "available": true,
+        "name": "Instagram Graph API",
+        "credential_key": "instagram_graph_api_token",
+        "required_by_default": false,
+        "notes": "Use only for permitted Professional-account or approved app workflows. Do not scrape logged-in/private content."
+      },
+      "allowed_outputs": ["post_url", "creator_handle", "profile_url", "caption_text", "hashtags", "posted_at", "species_terms", "broad_location", "media_type", "engagement_summary_if_available", "contact_path"],
+      "media_download_default": false,
+      "license_status": "unknown_contact_required",
+      "permission_status": "not_requested",
+      "priority": "high",
+      "notes": "Strong creator graph. Use for discovery and outreach, not bulk media collection."
+    },
+    {
+      "source_id": "tiktok_trailcam_hashtags",
+      "display_name": "TikTok Trail-Cam Hashtag Discovery",
+      "platform": "tiktok",
+      "source_type": "social_video_hashtag_search",
+      "base_url": "https://www.tiktok.com/",
+      "query_terms": ["trailcam", "trailcamera", "trailcamvideo", "gamecam", "cameratrap", "wildlifecamera", "backyardwildlife", "deertrailcam", "bobcat", "coyote", "bear", "pennsylvaniawildlife", "pawildlife"],
+      "collection_mode": "metadata_only",
+      "auth_mode": "official_api_only_or_manual_review",
+      "official_api": {
+        "available": true,
+        "name": "TikTok Research API / Display API",
+        "credential_key": "tiktok_api_token",
+        "required_by_default": false,
+        "notes": "Research API has eligibility limits. Display API is user-consent scoped. Do not use unofficial private scraping."
+      },
+      "allowed_outputs": ["video_url", "creator_handle", "profile_url", "caption_text", "hashtags", "posted_at", "species_terms", "broad_location", "media_type", "engagement_summary_if_available", "contact_path"],
+      "media_download_default": false,
+      "license_status": "unknown_contact_required",
+      "permission_status": "not_requested",
+      "priority": "medium_high",
+      "notes": "Good viral trail-cam discovery source. Weak archive quality unless creators opt in."
+    },
+    {
+      "source_id": "facebook_trailcam_public_discovery",
+      "display_name": "Facebook Public Trail-Cam Discovery",
+      "platform": "facebook",
+      "source_type": "social_public_page_group_discovery",
+      "base_url": "https://www.facebook.com/",
+      "query_terms": ["trail cam pics", "trail camera pictures", "trail camera videos", "game cam", "deer cam", "backyard wildlife cam", "Pennsylvania trail cam", "PA trail cam", "Berks County wildlife", "Oley wildlife", "Pennsylvania wildlife photography"],
+      "collection_mode": "metadata_only",
+      "auth_mode": "public_web_or_official_research_access_only",
+      "official_api": {
+        "available": true,
+        "name": "Meta Graph API / Content Library where eligible",
+        "credential_key": "meta_api_token",
+        "required_by_default": false,
+        "notes": "Do not scrape logged-in Facebook, private groups, restricted groups, or personal profiles."
+      },
+      "allowed_outputs": ["group_or_page_url", "group_or_page_name", "public_post_url_if_visible", "creator_or_page_owner", "caption_text_if_visible", "species_terms", "broad_location", "media_type", "contact_path"],
+      "media_download_default": false,
+      "license_status": "unknown_contact_required",
+      "permission_status": "not_requested",
+      "priority": "medium",
+      "notes": "Likely deep local content, but weakest clean programmatic access. Use mainly for manual lead discovery."
+    }
+  ]
+}

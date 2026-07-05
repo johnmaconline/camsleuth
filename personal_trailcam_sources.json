@@ -1,0 +1,337 @@
+{
+  "version": 1,
+  "description": "Personal, small-collection, forum, gallery, and public-submission trail-camera sources.",
+  "default_rules": {
+    "download_media_by_default": false,
+    "respect_robots_txt": true,
+    "max_pages_per_source": 50,
+    "request_timeout_seconds": 30,
+    "user_agent": "camsleuth/0.1 research metadata crawler"
+  },
+  "sources": [
+    {
+      "source_id": "camera_trap_codger",
+      "display_name": "Camera Trap Codger",
+      "source_type": "personal_blog",
+      "platform": "blogspot",
+      "base_url": "https://cameratrapcodger.blogspot.com/",
+      "entry_urls": ["https://cameratrapcodger.blogspot.com/"],
+      "content_types": ["html", "images", "embedded_video"],
+      "search_strategy": {
+        "mode": "site_crawl",
+        "seed_queries": ["trail camera", "camera trap", "bobcat", "deer", "bear", "coyote", "Magalia"]
+      },
+      "expected_metadata": ["source_id", "source_url", "page_url", "page_title", "page_date", "species_terms", "broad_location", "media_urls", "video_urls", "caption_text", "license_status", "contact_path"],
+      "license_status": "unknown_contact_required",
+      "ingestion_status": "candidate",
+      "priority": "high",
+      "notes": "Long-running personal camera-trapping blog with field posts and videos."
+    },
+    {
+      "source_id": "backyard_beasts",
+      "display_name": "Backyard Beasts",
+      "source_type": "personal_blog",
+      "platform": "blogspot",
+      "base_url": "https://con102.blogspot.com/",
+      "entry_urls": ["https://con102.blogspot.com/"],
+      "content_types": ["html", "images", "embedded_video"],
+      "search_strategy": {
+        "mode": "site_crawl",
+        "seed_queries": ["trail camera", "camera trap", "black bear", "coyote", "SD card", "backyard"]
+      },
+      "expected_metadata": ["source_id", "source_url", "page_url", "page_title", "page_date", "species_terms", "broad_location", "media_urls", "video_urls", "caption_text", "license_status", "contact_path"],
+      "license_status": "unknown_contact_required",
+      "ingestion_status": "candidate",
+      "priority": "high",
+      "notes": "Personal/small-project camera-trapping posts and SD-card-pull style content."
+    },
+    {
+      "source_id": "winterberry_wildlife",
+      "display_name": "Winterberry Wildlife",
+      "source_type": "personal_expert_site",
+      "platform": "wordpress",
+      "base_url": "https://winterberrywildlife.ouroneacrefarm.com/",
+      "entry_urls": ["https://winterberrywildlife.ouroneacrefarm.com/"],
+      "content_types": ["html", "images"],
+      "search_strategy": {
+        "mode": "site_crawl",
+        "seed_queries": ["trail camera", "camera trap", "Florida panther", "bobcat", "bear", "camera teardown", "trail camera review"]
+      },
+      "expected_metadata": ["source_id", "source_url", "page_url", "page_title", "page_date", "species_terms", "broad_location", "media_urls", "video_urls", "caption_text", "license_status", "contact_path"],
+      "license_status": "unknown_contact_required",
+      "ingestion_status": "candidate",
+      "priority": "high",
+      "notes": "High-value technical and field source. Includes camera trap examples and trail camera technical posts."
+    },
+    {
+      "source_id": "trogtrogblog",
+      "display_name": "TrogTrogBlog",
+      "source_type": "personal_blog",
+      "platform": "blogspot",
+      "base_url": "https://trogtrogblog.blogspot.com/",
+      "entry_urls": ["https://trogtrogblog.blogspot.com/"],
+      "content_types": ["html", "images", "embedded_video"],
+      "search_strategy": {
+        "mode": "site_crawl",
+        "seed_queries": ["trailcam", "trail camera", "camera trap", "otter", "stoat", "deer", "bird"]
+      },
+      "expected_metadata": ["source_id", "source_url", "page_url", "page_title", "page_date", "species_terms", "broad_location", "media_urls", "video_urls", "caption_text", "license_status", "contact_path"],
+      "license_status": "unknown_contact_required",
+      "ingestion_status": "candidate",
+      "priority": "high",
+      "notes": "Active trail-camera posts with species observations."
+    },
+    {
+      "source_id": "the_human_footprint",
+      "display_name": "The Human Footprint",
+      "source_type": "personal_blog",
+      "platform": "wordpress",
+      "base_url": "https://thehumanfootprint.wordpress.com/",
+      "entry_urls": ["https://thehumanfootprint.wordpress.com/"],
+      "content_types": ["html", "images"],
+      "search_strategy": {
+        "mode": "site_crawl",
+        "seed_queries": ["trail camera", "camera trap", "grizzly", "black bear", "wolf"]
+      },
+      "expected_metadata": ["source_id", "source_url", "page_url", "page_title", "page_date", "species_terms", "broad_location", "media_urls", "video_urls", "caption_text", "license_status", "contact_path"],
+      "license_status": "unknown_contact_required",
+      "ingestion_status": "candidate",
+      "priority": "medium_high",
+      "notes": "Personal trail camera / wildlife camera content with large-animal observations."
+    },
+    {
+      "source_id": "romping_rolling_rockies",
+      "display_name": "Romping and Rolling in the Rockies",
+      "source_type": "personal_blog",
+      "platform": "blogspot",
+      "base_url": "https://romp-roll-rockies.blogspot.com/",
+      "entry_urls": ["https://romp-roll-rockies.blogspot.com/"],
+      "content_types": ["html", "images", "embedded_video"],
+      "search_strategy": {
+        "mode": "site_crawl",
+        "seed_queries": ["trail camera", "wildlife camera", "mountain lion", "bobcat", "bear", "elk"]
+      },
+      "expected_metadata": ["source_id", "source_url", "page_url", "page_title", "page_date", "species_terms", "broad_location", "media_urls", "video_urls", "caption_text", "license_status", "contact_path"],
+      "license_status": "unknown_contact_required",
+      "ingestion_status": "candidate",
+      "priority": "medium_high",
+      "notes": "Colorado Front Range outdoor blog with trail-camera/wildlife-camera material."
+    },
+    {
+      "source_id": "carl_van_kesteren_smugmug",
+      "display_name": "Carl van Kesteren SmugMug Trail Camera Gallery",
+      "source_type": "personal_gallery",
+      "platform": "smugmug",
+      "base_url": "https://carlvankesteren.smugmug.com/Other-fun-stuff-/Trail-Camera-",
+      "entry_urls": ["https://carlvankesteren.smugmug.com/Other-fun-stuff-/Trail-Camera-"],
+      "content_types": ["html", "images"],
+      "search_strategy": {
+        "mode": "gallery_index",
+        "seed_queries": ["trail camera", "wildlife", "deer", "fox", "raccoon"]
+      },
+      "expected_metadata": ["source_id", "source_url", "page_url", "page_title", "page_date", "species_terms", "broad_location", "media_urls", "video_urls", "caption_text", "license_status", "contact_path"],
+      "license_status": "unknown_contact_required",
+      "ingestion_status": "candidate",
+      "priority": "high",
+      "notes": "Small hosted gallery explicitly labeled as trail-camera pictures."
+    },
+    {
+      "source_id": "vickis_nature_flickr",
+      "display_name": "Vicki's Nature Flickr",
+      "source_type": "personal_gallery",
+      "platform": "flickr",
+      "base_url": "https://www.flickr.com/photos/vickisnature/",
+      "entry_urls": ["https://www.flickr.com/photos/vickisnature/30261580085/"],
+      "content_types": ["html", "images", "video"],
+      "search_strategy": {
+        "mode": "gallery_index",
+        "seed_queries": ["trail cam", "trail camera", "bobcat", "yard", "wildlife"]
+      },
+      "expected_metadata": ["source_id", "source_url", "page_url", "page_title", "page_date", "species_terms", "broad_location", "media_urls", "video_urls", "caption_text", "license_status", "contact_path"],
+      "license_status": "unknown_contact_required",
+      "ingestion_status": "candidate",
+      "priority": "high",
+      "notes": "Yard trail-cam bobcat material. Useful consumer/backyard context."
+    },
+    {
+      "source_id": "bill_g_pinnell_flickr",
+      "display_name": "Bill G Pinnell Flickr",
+      "source_type": "personal_gallery",
+      "platform": "flickr",
+      "base_url": "https://www.flickr.com/photos/195642998@N04/",
+      "entry_urls": ["https://www.flickr.com/photos/195642998@N04/52810364283/"],
+      "content_types": ["html", "images"],
+      "search_strategy": {
+        "mode": "gallery_index",
+        "seed_queries": ["camera trap", "trail cam", "bobcat", "fox", "opossum", "raccoon", "rabbit"]
+      },
+      "expected_metadata": ["source_id", "source_url", "page_url", "page_title", "page_date", "species_terms", "broad_location", "media_urls", "video_urls", "caption_text", "license_status", "contact_path"],
+      "license_status": "unknown_contact_required",
+      "ingestion_status": "candidate",
+      "priority": "high",
+      "notes": "Personal Flickr camera-trap/trail-cam wildlife captures."
+    },
+    {
+      "source_id": "robin_james_nature_photography",
+      "display_name": "Robin James Nature Photography",
+      "source_type": "personal_photography_site",
+      "platform": "custom",
+      "base_url": "https://www.robinjamesnaturephoto.com/blog/2020/7/wildlife-camera-traps-trail-cameras-and-dslr-camera-traps",
+      "entry_urls": ["https://www.robinjamesnaturephoto.com/blog/2020/7/wildlife-camera-traps-trail-cameras-and-dslr-camera-traps"],
+      "content_types": ["html", "images"],
+      "search_strategy": {
+        "mode": "single_page",
+        "seed_queries": ["wildlife camera traps", "trail cameras", "badger", "garden", "DSLR camera trap"]
+      },
+      "expected_metadata": ["source_id", "source_url", "page_url", "page_title", "page_date", "species_terms", "broad_location", "media_urls", "video_urls", "caption_text", "license_status", "contact_path"],
+      "license_status": "unknown_contact_required",
+      "ingestion_status": "candidate",
+      "priority": "medium",
+      "notes": "Wildlife camera trap post with badgers, garden setup, and scouting workflow."
+    },
+    {
+      "source_id": "bobby_wummer_youtube",
+      "display_name": "Bobby Wummer Photography",
+      "source_type": "personal_video_channel",
+      "platform": "youtube",
+      "base_url": "https://www.youtube.com/channel/UCPLo6UhcHRbFkS5PIkBLI-A",
+      "entry_urls": ["https://www.youtube.com/channel/UCPLo6UhcHRbFkS5PIkBLI-A"],
+      "content_types": ["video", "html"],
+      "search_strategy": {
+        "mode": "video_channel",
+        "seed_queries": ["trail camera", "Florida panther", "black bear", "alligator", "coyote", "deer"]
+      },
+      "expected_metadata": ["source_id", "source_url", "page_url", "page_title", "page_date", "species_terms", "broad_location", "media_urls", "video_urls", "caption_text", "license_status", "contact_path"],
+      "license_status": "unknown_contact_required",
+      "ingestion_status": "candidate",
+      "priority": "medium_high",
+      "notes": "Florida trail-camera wildlife videos. Video-first source."
+    },
+    {
+      "source_id": "ghost_of_the_gulag",
+      "display_name": "Ghost of the Gulag",
+      "source_type": "personal_photography_blog",
+      "platform": "custom",
+      "base_url": "https://www.ghostofthegulag.com/blog/2025/3/31/camera-trapping-im-not-very-good-at-it-but-i-love-it",
+      "entry_urls": ["https://www.ghostofthegulag.com/blog/2025/3/31/camera-trapping-im-not-very-good-at-it-but-i-love-it"],
+      "content_types": ["html", "images"],
+      "search_strategy": {
+        "mode": "single_page",
+        "seed_queries": ["camera trapping", "coyote", "bobcat", "opossum", "raccoon", "skunk", "squirrel", "quail", "roadrunner"]
+      },
+      "expected_metadata": ["source_id", "source_url", "page_url", "page_title", "page_date", "species_terms", "broad_location", "media_urls", "video_urls", "caption_text", "license_status", "contact_path"],
+      "license_status": "unknown_contact_required",
+      "ingestion_status": "candidate",
+      "priority": "medium",
+      "notes": "Personal camera-trapping post with multiple species examples."
+    },
+    {
+      "source_id": "filip_blaauw_photography",
+      "display_name": "Filip Blaauw Photography",
+      "source_type": "personal_photography_blog",
+      "platform": "custom",
+      "base_url": "https://blaauw.photo/blog/camera-trapping-the-pine-marten/",
+      "entry_urls": ["https://blaauw.photo/blog/camera-trapping-the-pine-marten/"],
+      "content_types": ["html", "images"],
+      "search_strategy": {
+        "mode": "single_page",
+        "seed_queries": ["camera trapping", "pine marten", "trail camera", "camera trap"]
+      },
+      "expected_metadata": ["source_id", "source_url", "page_url", "page_title", "page_date", "species_terms", "broad_location", "media_urls", "video_urls", "caption_text", "license_status", "contact_path"],
+      "license_status": "unknown_contact_required",
+      "ingestion_status": "candidate",
+      "priority": "medium",
+      "notes": "Camera-trapping pine marten workflow."
+    },
+    {
+      "source_id": "randy_robbins_thousand_windows",
+      "display_name": "Randy Robbins / A Thousand Windows",
+      "source_type": "personal_photography_site",
+      "platform": "custom",
+      "base_url": "https://www.athousandwindows.com/camera-trap",
+      "entry_urls": ["https://www.athousandwindows.com/camera-trap"],
+      "content_types": ["html", "images"],
+      "search_strategy": {
+        "mode": "single_page",
+        "seed_queries": ["camera trap", "wildlife", "bobcat", "mountain lion", "northern California"]
+      },
+      "expected_metadata": ["source_id", "source_url", "page_url", "page_title", "page_date", "species_terms", "broad_location", "media_urls", "video_urls", "caption_text", "license_status", "contact_path"],
+      "license_status": "unknown_contact_required",
+      "ingestion_status": "candidate",
+      "priority": "medium",
+      "notes": "Camera-trap wildlife photography, northern California orientation."
+    },
+    {
+      "source_id": "collie_farm_blog",
+      "display_name": "The Collie Farm Blog",
+      "source_type": "personal_farm_blog",
+      "platform": "wordpress",
+      "base_url": "https://colliefarm.wordpress.com/",
+      "entry_urls": ["https://colliefarm.wordpress.com/"],
+      "content_types": ["html", "images"],
+      "search_strategy": {
+        "mode": "site_crawl",
+        "seed_queries": ["trail cam", "trail camera", "wildcat", "bobcat", "barn", "farm"]
+      },
+      "expected_metadata": ["source_id", "source_url", "page_url", "page_title", "page_date", "species_terms", "broad_location", "media_urls", "video_urls", "caption_text", "license_status", "contact_path"],
+      "license_status": "unknown_contact_required",
+      "ingestion_status": "candidate",
+      "priority": "medium",
+      "notes": "Personal farm blog with trail-cam wildlife posts."
+    },
+    {
+      "source_id": "ontario_out_of_doors_trail_cam_gallery",
+      "display_name": "Ontario OUT of DOORS Trail Cam Gallery",
+      "source_type": "forum_gallery",
+      "platform": "forum",
+      "base_url": "https://www.oodmag.com/community/forum.php",
+      "entry_urls": ["https://www.oodmag.com/community/forum.php"],
+      "content_types": ["html", "images"],
+      "search_strategy": {
+        "mode": "forum_index",
+        "seed_queries": ["Trail Cam Gallery", "trail cam", "trail camera", "deer", "bear", "moose", "wolf"]
+      },
+      "expected_metadata": ["source_id", "source_url", "page_url", "page_title", "page_date", "species_terms", "broad_location", "media_urls", "video_urls", "caption_text", "license_status", "contact_path"],
+      "license_status": "unknown_contact_required",
+      "ingestion_status": "candidate",
+      "priority": "high",
+      "notes": "Forum gallery with many user-submitted trail-cam threads/posts."
+    },
+    {
+      "source_id": "predator_masters_trail_cam_pics",
+      "display_name": "Predator Masters Trail Cam Pics Thread",
+      "source_type": "forum_thread",
+      "platform": "forum",
+      "base_url": "https://www.predatormasters.com/forums/threads/trail-cam-pics.358851/",
+      "entry_urls": ["https://www.predatormasters.com/forums/threads/trail-cam-pics.358851/"],
+      "content_types": ["html", "images"],
+      "search_strategy": {
+        "mode": "forum_thread",
+        "seed_queries": ["trail cam pics", "coyote", "bobcat", "fox", "predator", "deer"]
+      },
+      "expected_metadata": ["source_id", "source_url", "page_url", "page_title", "page_date", "species_terms", "broad_location", "media_urls", "video_urls", "caption_text", "license_status", "contact_path"],
+      "license_status": "unknown_contact_required",
+      "ingestion_status": "candidate",
+      "priority": "high",
+      "notes": "Forum thread where users share predator/game trail-cam pictures."
+    },
+    {
+      "source_id": "alaska_adfg_trail_camera_gallery",
+      "display_name": "Alaska ADF&G Trail Camera Gallery",
+      "source_type": "public_submission_gallery",
+      "platform": "government_gallery",
+      "base_url": "https://www.adfg.alaska.gov/index.cfm?adfg=viewing.trailcams",
+      "entry_urls": ["https://www.adfg.alaska.gov/index.cfm?adfg=viewing.trailcams"],
+      "content_types": ["html", "images"],
+      "search_strategy": {
+        "mode": "gallery_index",
+        "seed_queries": ["trail camera", "bear", "moose", "wolf", "lynx", "public submission"]
+      },
+      "expected_metadata": ["source_id", "source_url", "page_url", "page_title", "page_date", "species_terms", "broad_location", "media_urls", "video_urls", "caption_text", "license_status", "contact_path"],
+      "license_status": "check_site_terms",
+      "ingestion_status": "candidate",
+      "priority": "medium_high",
+      "notes": "Public-submission gallery. Not personal-hosted, but includes scientist/public trail-camera submissions."
+    }
+  ]
+}

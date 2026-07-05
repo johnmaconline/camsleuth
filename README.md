@@ -1,1 +1,100 @@
-# camsleuth
+# CamSleuth
+
+This package contains:
+
+- `camsleuth.py` - CLI for checking, mapping, and searching configured open/public trail-camera databases.
+- `open_trailcam_dbs.json` - hand-editable database catalog.
+- `trailcam_creds.local.json` - generated local credential template. Do not commit this file.
+
+## Basic usage
+
+```bash
+python3 camsleuth.py --init-creds
+python3 camsleuth.py --check
+python3 camsleuth.py --scan-dbs
+python3 camsleuth.py --map
+python3 camsleuth.py --list-api lila_catalog
+python3 camsleuth.py --db caltech_camera_traps --metadata-extract 5a21788e-23d2-11e8-a6a3-ec086b02610b.jpg
+python3 camsleuth.py --db lila_catalog --find deer Pennsylvania --limit 10
+```
+
+## Personal / Small-Collection Trail-Cam Sources
+
+```bash
+python3 camsleuth.py --personal-sources personal_trailcam_sources.json --validate-personal-config
+python3 camsleuth.py --personal-sources personal_trailcam_sources.json --check-personal
+python3 camsleuth.py --personal-sources personal_trailcam_sources.json --discover
+python3 camsleuth.py --personal-source all --find bobcat --limit 10
+python3 camsleuth.py --personal-source all --find "trail camera" coyote --export-results coyote_personal_results.csv
+python3 camsleuth.py --personal-sources personal_trailcam_sources.json --export-leads trailcam_personal_leads.csv
+```
+
+These sources are public web sources, not open-source datasets. Use them for discovery, metadata indexing, and outreach. Do not download or reuse full media unless the license permits it or the owner grants permission.
+
+## Social Trail-Cam Discovery
+
+Social platforms are used for metadata-only discovery and outreach. They are not treated as open datasets. The tool does not download videos/images by default and does not scrape private or logged-in content.
+
+```bash
+python3 camsleuth.py --social-sources social_trailcam_sources.json --validate-social-config
+python3 camsleuth.py --social-sources social_trailcam_sources.json --check-social
+python3 camsleuth.py --social-sources social_trailcam_sources.json --discover-social
+python3 camsleuth.py --social-source all --find bobcat --limit 10
+python3 camsleuth.py --social-source all --find pennsylvania deer --export-social-results pa_deer_social_results.csv
+python3 camsleuth.py --social-sources social_trailcam_sources.json --export-social-leads trailcam_social_leads.csv
+```
+
+Public social posts are not automatically reusable training data. Use exported leads for outreach. Ingest original media only when the creator grants permission or the post/license explicitly allows reuse.
+
+## Searching LILA COCO datasets
+
+LILA member datasets usually require downloading large metadata archives first:
+
+```bash
+python3 camsleuth.py --db caltech_camera_traps --download-metadata --find coyote --limit 10
+python3 camsleuth.py --db nacti --download-metadata --find deer --limit 10
+```
+
+Without `--download-metadata`, structured LILA dataset search only works if the metadata archive is already cached under `trailcam_cache/`.
+
+## API maps
+
+Generate one API/static-surface map per configured database:
+
+```bash
+python3 camsleuth.py --map
+```
+
+Maps are written to `trailcam_api_maps/*.api_map.json` by default.
+
+For full COCO key/count inspection, add:
+
+```bash
+python3 camsleuth.py --db caltech_camera_traps --map --download-metadata
+```
+
+## Credential model
+
+Most configured sources are public static datasets or public download pages. The generated credentials file still exists so private/tokenized endpoints can be added later without changing the script.
+
+To add a tokenized source, edit `open_trailcam_dbs.json`:
+
+```json
+"auth": {"type": "bearer_token", "required": true}
+```
+
+Then regenerate creds:
+
+```bash
+python3 camsleuth.py --init-creds
+```
+
+Set the generated environment variable before use.
+
+## Design constraint
+
+This tool does not pretend that every source has a live public search API. It treats each source honestly:
+
+- LILA datasets: static public metadata + images, mostly COCO Camera Traps JSON.
+- LILA catalog: public CSV catalog.
+- Wildlife Insights / eMammal: public web/download surfaces, not a declared universal public REST search API in this config.
