@@ -1,0 +1,409 @@
+{
+  "version": 1,
+  "description": "Official state government and public-agency wildlife, trail, fish, nest, and nature camera sources. These are public viewing, public-submission, or citizen-science surfaces, not open-source media datasets.",
+  "default_rules": {
+    "download_media_by_default": false,
+    "respect_robots_txt": true,
+    "max_pages_per_source": 50,
+    "request_timeout_seconds": 30,
+    "user_agent": "camsleuth/0.1 official government camera metadata crawler"
+  },
+  "sources": [
+    {
+      "source_id": "alaska_adfg_virtual_wildlife_viewing",
+      "display_name": "Alaska ADF&G Virtual Wildlife Viewing",
+      "source_type": "public_agency_wildlife_cam_directory",
+      "platform": "government_gallery",
+      "base_url": "https://www.adfg.alaska.gov/index.cfm?adfg=viewing.main",
+      "entry_urls": ["https://www.adfg.alaska.gov/index.cfm?adfg=viewing.main", "https://www.adfg.alaska.gov/index.cfm?adfg=viewing.webcams", "https://www.adfg.alaska.gov/index.cfm?adfg=viewing.trailcams"],
+      "content_types": ["html", "images", "live_stream_metadata"],
+      "search_strategy": {
+        "mode": "agency_camera_directory",
+        "seed_queries": ["Alaska Department of Fish and Game", "wildlife webcams", "trail cameras", "salmon", "bear", "moose", "wolf", "lynx"]
+      },
+      "expected_metadata": ["source_id", "source_url", "page_url", "page_title", "page_date", "species_terms", "broad_location", "media_urls", "video_urls", "caption_text", "license_status", "contact_path"],
+      "license_status": "check_site_terms",
+      "ingestion_status": "candidate",
+      "priority": "high",
+      "notes": "Official Alaska Department of Fish and Game virtual wildlife viewing pages for webcams, trail-camera gallery images, videos, audio, and tracking maps."
+    },
+    {
+      "source_id": "arizona_game_fish_wildlife_cams",
+      "display_name": "Arizona Game and Fish Wildlife Viewing Cams",
+      "source_type": "public_agency_live_cam_directory",
+      "platform": "government_site",
+      "base_url": "https://www.azgfd.com/wildlife-conservation/wildlife-viewing/wildlife-live-cams/",
+      "entry_urls": ["https://www.azgfd.com/wildlife-conservation/wildlife-viewing/wildlife-live-cams/", "https://www.azgfd.com/wildlife-conservation/wildlife-viewing/wildlife-live-cams/live-sandhill-crane-cam/", "https://www.azgfd.com/wildlife-conservation/wildlife-viewing/wildlife-live-cams/live-barn-owls-cam/", "https://www.azgfd.com/wildlife-conservation/wildlife-viewing/wildlife-live-cams/bat-cam/"],
+      "content_types": ["html", "embedded_video", "live_stream_metadata"],
+      "search_strategy": {
+        "mode": "agency_live_cam_directory",
+        "seed_queries": ["Arizona Game and Fish", "wildlife live cams", "sandhill crane", "barn owl", "bat cam"]
+      },
+      "expected_metadata": ["source_id", "source_url", "page_url", "page_title", "page_date", "species_terms", "broad_location", "media_urls", "video_urls", "caption_text", "license_status", "contact_path"],
+      "license_status": "check_site_terms",
+      "ingestion_status": "candidate",
+      "priority": "high",
+      "notes": "Official Arizona Game and Fish wildlife cam program with sandhill crane, barn owl, bat, and other seasonal public streams."
+    },
+    {
+      "source_id": "connecticut_deep_bat_cam",
+      "display_name": "Connecticut DEEP Live Bats Count Bat Cam",
+      "source_type": "public_agency_live_cam",
+      "platform": "government_partner_site",
+      "base_url": "https://portal.ct.gov/DEEP/Wildlife/Live-Bats-Count-Bat-Cam",
+      "entry_urls": ["https://portal.ct.gov/DEEP/Wildlife/Live-Bats-Count-Bat-Cam", "https://portal.ct.gov/deep/wildlife/bats-count"],
+      "content_types": ["html", "embedded_video", "live_stream_metadata"],
+      "search_strategy": {
+        "mode": "agency_live_cam_page",
+        "seed_queries": ["Connecticut DEEP Wildlife Division", "Live Bats Count", "bat cam", "big brown bat", "Litchfield"]
+      },
+      "expected_metadata": ["source_id", "source_url", "page_url", "page_title", "page_date", "species_terms", "broad_location", "media_urls", "video_urls", "caption_text", "license_status", "contact_path"],
+      "license_status": "check_site_terms",
+      "ingestion_status": "candidate",
+      "priority": "high",
+      "notes": "CT DEEP Wildlife Division and White Memorial Conservation Center bat-cam program with public multi-camera barn livestream."
+    },
+    {
+      "source_id": "delaware_dnrec_dupont_nature_center_cams",
+      "display_name": "Delaware DNREC DuPont Nature Center Cameras",
+      "source_type": "public_agency_nature_center_cams",
+      "platform": "government_site",
+      "base_url": "https://dnrec.delaware.gov/fish-wildlife/education-outreach/dupont-nature-center/",
+      "entry_urls": ["https://dnrec.delaware.gov/fish-wildlife/education-outreach/dupont-nature-center/", "https://dnrec.delaware.gov/wildlife/"],
+      "content_types": ["html", "embedded_video", "live_stream_metadata"],
+      "search_strategy": {
+        "mode": "agency_nature_center_camera_page",
+        "seed_queries": ["Delaware DNREC", "DuPont Nature Center", "Mispillion Harbor Camera", "Mispillion Harbor Osprey Camera", "shorebirds", "horseshoe crabs", "osprey"]
+      },
+      "expected_metadata": ["source_id", "source_url", "page_url", "page_title", "page_date", "species_terms", "broad_location", "media_urls", "video_urls", "caption_text", "license_status", "contact_path"],
+      "license_status": "check_site_terms",
+      "ingestion_status": "candidate",
+      "priority": "high",
+      "notes": "Official Delaware DNREC DuPont Nature Center camera resources for Mispillion Harbor and osprey viewing."
+    },
+    {
+      "source_id": "florida_fwc_wildlife_watch",
+      "display_name": "Florida FWC Wildlife Watch Trail-Camera Projects",
+      "source_type": "public_agency_trail_camera_citizen_science",
+      "platform": "government_citizen_science",
+      "base_url": "https://myfwc.com/news/all-news/wildlife-watch-0526/",
+      "entry_urls": ["https://myfwc.com/news/all-news/wildlife-watch-0526/", "https://myfwc.com/news/all-news/wildlife-watch-424/", "https://myfwc.com/viewing/"],
+      "content_types": ["html", "trail_camera_project_metadata"],
+      "search_strategy": {
+        "mode": "agency_trail_camera_project_pages",
+        "seed_queries": ["Florida Fish and Wildlife Conservation Commission", "Florida Wildlife Watch", "Everglades Wildlife Watch", "trail camera", "citizen science", "wildlife management area"]
+      },
+      "expected_metadata": ["source_id", "source_url", "page_url", "page_title", "page_date", "species_terms", "broad_location", "media_urls", "video_urls", "caption_text", "license_status", "contact_path"],
+      "license_status": "check_site_terms",
+      "ingestion_status": "candidate",
+      "priority": "medium_high",
+      "notes": "FWC public trail-camera image classification projects, including Florida Wildlife Watch and Everglades Wildlife Watch. Treat as project metadata unless dataset terms permit media reuse."
+    },
+    {
+      "source_id": "georgia_dnr_berry_eagle_cam",
+      "display_name": "Georgia DNR Berry College Eagle Cam",
+      "source_type": "public_agency_partner_nest_cam",
+      "platform": "government_partner_site",
+      "base_url": "https://georgiawildlife.com/berry-eagle-cam",
+      "entry_urls": ["https://georgiawildlife.com/berry-eagle-cam", "https://georgiawildlife.com/cam"],
+      "content_types": ["html", "embedded_video", "live_stream_metadata"],
+      "search_strategy": {
+        "mode": "agency_partner_nest_cam",
+        "seed_queries": ["Georgia DNR", "Berry College Eagle Cam", "bald eagle", "nest cam", "Georgia Wildlife"]
+      },
+      "expected_metadata": ["source_id", "source_url", "page_url", "page_title", "page_date", "species_terms", "broad_location", "media_urls", "video_urls", "caption_text", "license_status", "contact_path"],
+      "license_status": "check_site_terms",
+      "ingestion_status": "candidate",
+      "priority": "high",
+      "notes": "Georgia DNR Wildlife Resources Division page for the Berry College bald eagle nest cam and related cam resources."
+    },
+    {
+      "source_id": "idaho_fish_game_wildlife_webcams",
+      "display_name": "Idaho Fish and Game Wildlife Webcams",
+      "source_type": "public_agency_wildlife_cam_directory",
+      "platform": "government_site",
+      "base_url": "https://idfg.idaho.gov/watch/wildlife",
+      "entry_urls": ["https://idfg.idaho.gov/watch/wildlife", "https://idfg.idaho.gov/watch/wildlife/osprey-salmon", "https://idfg.idaho.gov/visit/mknc/live-cameras"],
+      "content_types": ["html", "embedded_video", "live_stream_metadata"],
+      "search_strategy": {
+        "mode": "agency_camera_directory",
+        "seed_queries": ["Idaho Fish and Game", "wildlife webcams", "Salmon Outdoor Classroom", "osprey", "MK Nature Center", "underwater camera"]
+      },
+      "expected_metadata": ["source_id", "source_url", "page_url", "page_title", "page_date", "species_terms", "broad_location", "media_urls", "video_urls", "caption_text", "license_status", "contact_path"],
+      "license_status": "check_site_terms",
+      "ingestion_status": "candidate",
+      "priority": "high",
+      "notes": "Idaho Fish and Game wildlife webcam resources, including Salmon Outdoor Classroom osprey camera and MK Nature Center live cameras."
+    },
+    {
+      "source_id": "indiana_dnr_fish_wildlife_cameras",
+      "display_name": "Indiana DNR Fish and Wildlife Cameras",
+      "source_type": "public_agency_live_cam_directory",
+      "platform": "government_site",
+      "base_url": "https://www.in.gov/dnr/fish-and-wildlife/properties/goose-pond-fwa/goose-pond-fish-and-wildlife-cameras/",
+      "entry_urls": ["https://www.in.gov/dnr/fish-and-wildlife/properties/goose-pond-fwa/goose-pond-fish-and-wildlife-cameras/", "https://www.in.gov/dnr/fish-and-wildlife/wildlife-resources/animals/barn-owl/barn-owl-nest-webcam/"],
+      "content_types": ["html", "embedded_video", "live_stream_metadata"],
+      "search_strategy": {
+        "mode": "agency_live_cam_pages",
+        "seed_queries": ["Indiana DNR", "Goose Pond Fish and Wildlife Area", "web cameras", "barn owl", "nest webcam"]
+      },
+      "expected_metadata": ["source_id", "source_url", "page_url", "page_title", "page_date", "species_terms", "broad_location", "media_urls", "video_urls", "caption_text", "license_status", "contact_path"],
+      "license_status": "check_site_terms",
+      "ingestion_status": "candidate",
+      "priority": "high",
+      "notes": "Indiana DNR Division of Fish and Wildlife public cameras for Goose Pond Fish and Wildlife Area and barn owl conservation."
+    },
+    {
+      "source_id": "maryland_dnr_state_parks_live_cams",
+      "display_name": "Maryland DNR State Parks Live Cams",
+      "source_type": "public_agency_partner_live_cam_directory",
+      "platform": "youtube_government_channel",
+      "base_url": "https://www.youtube.com/@marylandstateparkslivecams2045",
+      "entry_urls": ["https://www.youtube.com/@marylandstateparkslivecams2045", "https://dnr.maryland.gov/wildlife/Pages/plants_wildlife/osprey.aspx", "https://www.youtube.com/MarylandDNR"],
+      "content_types": ["html", "video", "live_stream_metadata"],
+      "search_strategy": {
+        "mode": "agency_video_channel_and_wildlife_pages",
+        "seed_queries": ["Maryland DNR", "State Parks Live Cams", "osprey cam", "state park cameras", "MarylandDNR"]
+      },
+      "expected_metadata": ["source_id", "source_url", "page_url", "page_title", "page_date", "species_terms", "broad_location", "media_urls", "video_urls", "caption_text", "license_status", "contact_path"],
+      "license_status": "check_site_terms",
+      "ingestion_status": "candidate",
+      "priority": "medium",
+      "notes": "Maryland DNR state park live camera channel plus agency osprey cam references. Moderate match because it mixes park condition cams and wildlife-specific content."
+    },
+    {
+      "source_id": "masswildlife_peregrine_falcon_cameras",
+      "display_name": "MassWildlife Peregrine Falcon Cameras",
+      "source_type": "public_agency_nest_cam_directory",
+      "platform": "government_site",
+      "base_url": "https://www.mass.gov/info-details/view-peregrine-falcon-cameras",
+      "entry_urls": ["https://www.mass.gov/info-details/view-peregrine-falcon-cameras", "https://www.mass.gov/info-details/explore-massachusetts-wildlife-and-connect-with-nature"],
+      "content_types": ["html", "embedded_video", "periodic_image_metadata"],
+      "search_strategy": {
+        "mode": "agency_nest_cam_directory",
+        "seed_queries": ["MassWildlife", "peregrine falcon cameras", "Lawrence", "Newburyport", "Cambridge", "raptor monitoring"]
+      },
+      "expected_metadata": ["source_id", "source_url", "page_url", "page_title", "page_date", "species_terms", "broad_location", "media_urls", "video_urls", "caption_text", "license_status", "contact_path"],
+      "license_status": "check_site_terms",
+      "ingestion_status": "candidate",
+      "priority": "high",
+      "notes": "MassWildlife page linking to peregrine falcon cameras around Massachusetts, including livestreaming and periodic-update sites."
+    },
+    {
+      "source_id": "minnesota_dnr_webcams",
+      "display_name": "Minnesota DNR Web Cams",
+      "source_type": "public_agency_wildlife_cam_directory",
+      "platform": "government_site",
+      "base_url": "https://www.dnr.state.mn.us/features/webcams/index.html",
+      "entry_urls": ["https://www.dnr.state.mn.us/features/webcams/index.html", "https://www.dnr.state.mn.us/features/webcams/eaglecam/index.html", "https://www.dnr.state.mn.us/features/webcams/falconcam/index.html"],
+      "content_types": ["html", "embedded_video", "live_stream_metadata"],
+      "search_strategy": {
+        "mode": "agency_camera_directory",
+        "seed_queries": ["Minnesota DNR", "DNR Web Cams", "EagleCam", "FalconCam", "FishCam", "Window on Wildlife", "Mississippi Headwaters"]
+      },
+      "expected_metadata": ["source_id", "source_url", "page_url", "page_title", "page_date", "species_terms", "broad_location", "media_urls", "video_urls", "caption_text", "license_status", "contact_path"],
+      "license_status": "check_site_terms",
+      "ingestion_status": "candidate",
+      "priority": "high",
+      "notes": "Minnesota DNR webcam hub covering EagleCam, FalconCam, FishCam, Window on Wildlife, and Mississippi Headwaters camera resources."
+    },
+    {
+      "source_id": "missouri_mdc_photos_live_cams",
+      "display_name": "Missouri MDC Photos and Live Cams",
+      "source_type": "public_agency_live_cam_media_hub",
+      "platform": "government_site",
+      "base_url": "https://mdc.mo.gov/discover-nature/photos-live-cams/gallery",
+      "entry_urls": ["https://mdc.mo.gov/discover-nature/photos-live-cams/peregrine-falcon-web-camera", "https://mdc.mo.gov/discover-nature/photos-live-cams/gallery", "https://mdc.mo.gov/discover-nature"],
+      "content_types": ["html", "embedded_video", "live_stream_metadata", "images"],
+      "search_strategy": {
+        "mode": "agency_live_cam_media_hub",
+        "seed_queries": ["Missouri Department of Conservation", "Photos and Live Cams", "peregrine falcon", "web camera", "wildlife education"]
+      },
+      "expected_metadata": ["source_id", "source_url", "page_url", "page_title", "page_date", "species_terms", "broad_location", "media_urls", "video_urls", "caption_text", "license_status", "contact_path"],
+      "license_status": "check_site_terms",
+      "ingestion_status": "candidate",
+      "priority": "high",
+      "notes": "Missouri Department of Conservation live-cam media hub and peregrine falcon web camera page."
+    },
+    {
+      "source_id": "montana_fwp_osprey_cam",
+      "display_name": "Montana FWP Spring Meadow Lake Osprey Cam",
+      "source_type": "public_agency_partner_nest_cam",
+      "platform": "government_partner_site",
+      "base_url": "https://fwp.mt.gov/education/montana-wild/osprey-cam",
+      "entry_urls": ["https://fwp.mt.gov/education/montana-wild/osprey-cam", "https://fwp.mt.gov/education"],
+      "content_types": ["html", "embedded_video", "live_stream_metadata"],
+      "search_strategy": {
+        "mode": "agency_partner_nest_cam",
+        "seed_queries": ["Montana Fish Wildlife and Parks", "Spring Meadow Lake", "osprey cam", "Helena", "Last Chance Audubon"]
+      },
+      "expected_metadata": ["source_id", "source_url", "page_url", "page_title", "page_date", "species_terms", "broad_location", "media_urls", "video_urls", "caption_text", "license_status", "contact_path"],
+      "license_status": "check_site_terms",
+      "ingestion_status": "candidate",
+      "priority": "high",
+      "notes": "Montana FWP Spring Meadow Lake State Park osprey webcam, supported with partner camera infrastructure."
+    },
+    {
+      "source_id": "nebraska_game_parks_bird_cams",
+      "display_name": "Nebraska Game and Parks Bird Cams",
+      "source_type": "public_agency_bird_cam_directory",
+      "platform": "government_site",
+      "base_url": "https://outdoornebraska.gov/learn/nebraska-wildlife/nebraska-animals/birds/peregrine-falcons/",
+      "entry_urls": ["https://outdoornebraska.gov/learn/nebraska-wildlife/nebraska-animals/birds/peregrine-falcons/", "https://birdtrail.outdoornebraska.gov/resources/bird-cams/"],
+      "content_types": ["html", "embedded_video", "live_stream_metadata"],
+      "search_strategy": {
+        "mode": "agency_bird_cam_pages",
+        "seed_queries": ["Nebraska Game and Parks", "peregrine falcon cameras", "Nebraska State Capitol", "bird cams", "sandhill crane", "raptor"]
+      },
+      "expected_metadata": ["source_id", "source_url", "page_url", "page_title", "page_date", "species_terms", "broad_location", "media_urls", "video_urls", "caption_text", "license_status", "contact_path"],
+      "license_status": "check_site_terms",
+      "ingestion_status": "candidate",
+      "priority": "high",
+      "notes": "Nebraska Game and Parks peregrine falcon cameras and Bird Cams resource links around the state."
+    },
+    {
+      "source_id": "north_carolina_wrc_barn_owl_cam",
+      "display_name": "North Carolina Wildlife Barn Owl Live Cam",
+      "source_type": "public_agency_live_nest_cam",
+      "platform": "government_site",
+      "base_url": "https://www.ncwildlife.gov/wildlife-habitat/barn-owl-live-cam",
+      "entry_urls": ["https://www.ncwildlife.gov/wildlife-habitat/barn-owl-live-cam", "https://www.ncwildlife.gov/", "https://www.ncwildlife.gov/news/press-releases/2026/04/01/rare-chance-watch-barn-owls-hatch-their-nest"],
+      "content_types": ["html", "embedded_video", "live_stream_metadata"],
+      "search_strategy": {
+        "mode": "agency_live_nest_cam",
+        "seed_queries": ["North Carolina Wildlife Resources Commission", "Barn Owl Live Cam", "nest camera", "barn owl", "wildlife education"]
+      },
+      "expected_metadata": ["source_id", "source_url", "page_url", "page_title", "page_date", "species_terms", "broad_location", "media_urls", "video_urls", "caption_text", "license_status", "contact_path"],
+      "license_status": "check_site_terms",
+      "ingestion_status": "candidate",
+      "priority": "high",
+      "notes": "NC Wildlife Resources Commission 24/7 barn owl live cam and related public engagement materials."
+    },
+    {
+      "source_id": "pa_game_commission_wildlife_cams",
+      "display_name": "Pennsylvania Game Commission Wildlife Cams",
+      "source_type": "public_agency_live_cam_directory",
+      "platform": "pa_game_commission_hdontap",
+      "base_url": "https://www.pa.gov/agencies/pgc/wildlife/wildlife-viewing/wildlife-cams",
+      "entry_urls": ["https://www.pa.gov/agencies/pgc/wildlife/wildlife-viewing/wildlife-cams", "https://www.pa.gov/agencies/pgc/education/wildlife-on-wifi/virtual-field-trips", "https://hdontap.com/stream/228253/pennsylvania-elk-live-webcam/", "https://hdontap.com/stream/387619/pennsylvania-snow-geese-live-webcam/", "https://hdontap.com/stream/795150/pennsylvania-farm-country-bald-eagle-live-cams/", "https://hdontap.com/stream/204942/hanover-eagles-nest-live-cam/"],
+      "content_types": ["html", "embedded_video", "live_stream_metadata"],
+      "search_strategy": {
+        "mode": "agency_live_cam_directory",
+        "seed_queries": ["Pennsylvania Game Commission", "elk cam", "snow geese cam", "bald eagle cam", "bear cam", "Hanover eagle cam", "Benezette", "Middle Creek Wildlife Management Area", "Lancaster County"]
+      },
+      "expected_metadata": ["source_id", "source_url", "page_url", "page_title", "page_date", "species_terms", "broad_location", "media_urls", "video_urls", "caption_text", "license_status", "contact_path"],
+      "license_status": "check_site_terms",
+      "ingestion_status": "candidate",
+      "priority": "high",
+      "notes": "Reference-model official Pennsylvania Game Commission wildlife-cam hub with HDOnTap partner streams and virtual field trip resources."
+    },
+    {
+      "source_id": "south_carolina_state_parks_webcams",
+      "display_name": "South Carolina State Parks Webcams",
+      "source_type": "public_agency_state_park_webcams",
+      "platform": "state_parks_site",
+      "base_url": "https://southcarolinaparks.com/webcams",
+      "entry_urls": ["https://southcarolinaparks.com/webcams", "https://southcarolinaparks.com/webcams/huntington-beach", "https://southcarolinaparks.com/webcams/santee"],
+      "content_types": ["html", "embedded_video", "live_stream_metadata"],
+      "search_strategy": {
+        "mode": "state_park_webcam_directory",
+        "seed_queries": ["South Carolina State Parks", "webcams", "Huntington Beach", "Santee", "state park", "nature viewing"]
+      },
+      "expected_metadata": ["source_id", "source_url", "page_url", "page_title", "page_date", "species_terms", "broad_location", "media_urls", "video_urls", "caption_text", "license_status", "contact_path"],
+      "license_status": "check_site_terms",
+      "ingestion_status": "candidate",
+      "priority": "medium",
+      "notes": "South Carolina State Parks public webcam network. Moderate match because it is park/scenic-oriented rather than a wildlife-specific agency cam hub."
+    },
+    {
+      "source_id": "tennessee_twra_twrf_elk_cam",
+      "display_name": "Tennessee TWRA / TWRF Live Elk Cam",
+      "source_type": "public_agency_partner_live_cam",
+      "platform": "government_partner_hdontap",
+      "base_url": "https://www.tn.gov/twra/wildlife/mammals/large/elk.html",
+      "entry_urls": ["https://www.tn.gov/twra/wildlife/mammals/large/elk.html", "https://twrf.net/elk-cam", "https://hdontap.com/stream/359514/tennessee-elk-live-webcam/"],
+      "content_types": ["html", "embedded_video", "live_stream_metadata"],
+      "search_strategy": {
+        "mode": "agency_partner_live_cam",
+        "seed_queries": ["Tennessee Wildlife Resources Agency", "Tennessee Wildlife Resources Foundation", "elk cam", "Hatfield Knob", "North Cumberland WMA", "HDOnTap"]
+      },
+      "expected_metadata": ["source_id", "source_url", "page_url", "page_title", "page_date", "species_terms", "broad_location", "media_urls", "video_urls", "caption_text", "license_status", "contact_path"],
+      "license_status": "check_site_terms",
+      "ingestion_status": "candidate",
+      "priority": "high",
+      "notes": "TWRA-linked and TWRF-hosted Tennessee live elk camera at Hatfield Knob / North Cumberland WMA, with HDOnTap partner stream."
+    },
+    {
+      "source_id": "virginia_dwr_wildlife_cams",
+      "display_name": "Virginia DWR Wildlife Cams",
+      "source_type": "public_agency_live_cam_directory",
+      "platform": "government_site",
+      "base_url": "https://dwr.virginia.gov/wildlife-watching/wildlife-cams/",
+      "entry_urls": ["https://dwr.virginia.gov/wildlife-watching/wildlife-cams/", "https://dwr.virginia.gov/marsh-cam/", "https://dwr.virginia.gov/falcon-cam/", "https://dwr.virginia.gov/elk-cam/", "https://dwr.virginia.gov/shad-cam/"],
+      "content_types": ["html", "embedded_video", "live_stream_metadata"],
+      "search_strategy": {
+        "mode": "agency_live_cam_directory",
+        "seed_queries": ["Virginia Department of Wildlife Resources", "wildlife cams", "marsh cam", "shad cam", "Richmond Falcon Cam", "elk cam"]
+      },
+      "expected_metadata": ["source_id", "source_url", "page_url", "page_title", "page_date", "species_terms", "broad_location", "media_urls", "video_urls", "caption_text", "license_status", "contact_path"],
+      "license_status": "check_site_terms",
+      "ingestion_status": "candidate",
+      "priority": "high",
+      "notes": "Virginia DWR centralized wildlife cam hub covering aquatic life, falcons, restored elk habitat, tidal marsh habitat, and related species/habitats."
+    },
+    {
+      "source_id": "washington_wdfw_live_cameras",
+      "display_name": "Washington WDFW Fish and Wildlife Live Cameras",
+      "source_type": "public_agency_fish_wildlife_cam_directory",
+      "platform": "government_site",
+      "base_url": "https://wdfw.wa.gov/species-habitats/wildlife-viewing/fish-wildlife-cameras",
+      "entry_urls": ["https://wdfw.wa.gov/species-habitats/wildlife-viewing/fish-wildlife-cameras", "https://wdfw.wa.gov/species-habitats/wildlife-viewing", "https://wdfw.wa.gov/places-to-go/salmon-viewing"],
+      "content_types": ["html", "embedded_video", "live_stream_metadata"],
+      "search_strategy": {
+        "mode": "agency_fish_wildlife_camera_directory",
+        "seed_queries": ["Washington Department of Fish and Wildlife", "Fish and Wildlife Live Cameras", "wildlife viewing", "fish cameras", "salmon viewing"]
+      },
+      "expected_metadata": ["source_id", "source_url", "page_url", "page_title", "page_date", "species_terms", "broad_location", "media_urls", "video_urls", "caption_text", "license_status", "contact_path"],
+      "license_status": "check_site_terms",
+      "ingestion_status": "candidate",
+      "priority": "high",
+      "notes": "Washington DFW fish and wildlife live camera hub under the agency's wildlife viewing program."
+    },
+    {
+      "source_id": "wisconsin_dnr_eek_snapshot_wildlife_cams",
+      "display_name": "Wisconsin DNR / EEK Wildlife Webcams and Snapshot Wisconsin",
+      "source_type": "public_agency_wildlife_webcam_and_trail_camera_network",
+      "platform": "government_education_site",
+      "base_url": "https://www.eekwi.org/articles/wildlife-webcams/",
+      "entry_urls": ["https://www.eekwi.org/articles/wildlife-webcams/", "https://www.eekwi.org/explore/identification/test-your-wildlife-id-skills/", "https://www.eekwi.org/about-eek/"],
+      "content_types": ["html", "embedded_video", "trail_camera_project_metadata"],
+      "search_strategy": {
+        "mode": "agency_education_webcam_and_trail_camera_pages",
+        "seed_queries": ["Wisconsin DNR", "EEK WI", "wildlife webcams", "Snapshot Wisconsin", "trail cameras", "wildlife ID"]
+      },
+      "expected_metadata": ["source_id", "source_url", "page_url", "page_title", "page_date", "species_terms", "broad_location", "media_urls", "video_urls", "caption_text", "license_status", "contact_path"],
+      "license_status": "check_site_terms",
+      "ingestion_status": "candidate",
+      "priority": "medium_high",
+      "notes": "Wisconsin natural-resources education wildlife webcam page and Snapshot Wisconsin trail-camera network references. Moderate-to-strong match because the program spans webcams and trail-camera projects."
+    },
+    {
+      "source_id": "wyoming_game_fish_wildlive_cameras",
+      "display_name": "Wyoming Game and Fish WildLIVE Cameras",
+      "source_type": "public_agency_live_cam_program",
+      "platform": "government_site",
+      "base_url": "https://wgfd.wyo.gov/News/Game-and-Fish-launches-WildLIVE-web-cameras",
+      "entry_urls": ["https://wgfd.wyo.gov/News/Game-and-Fish-launches-WildLIVE-web-cameras", "https://wgfd.wyo.gov/"],
+      "content_types": ["html", "embedded_video", "live_stream_metadata"],
+      "search_strategy": {
+        "mode": "agency_live_cam_program_pages",
+        "seed_queries": ["Wyoming Game and Fish Department", "WildLIVE", "wildlife cameras", "web cameras", "Wyoming outdoors"]
+      },
+      "expected_metadata": ["source_id", "source_url", "page_url", "page_title", "page_date", "species_terms", "broad_location", "media_urls", "video_urls", "caption_text", "license_status", "contact_path"],
+      "license_status": "check_site_terms",
+      "ingestion_status": "candidate",
+      "priority": "high",
+      "notes": "Wyoming Game and Fish WildLIVE camera program launch and agency site references for official wildlife web cameras."
+    }
+  ]
+}

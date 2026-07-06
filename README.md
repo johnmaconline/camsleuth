@@ -3,7 +3,9 @@
 This package contains:
 
 - `camsleuth.py` - CLI for checking, mapping, and searching configured open/public trail-camera databases.
-- `open_trailcam_dbs.json` - hand-editable database catalog.
+- `sources/open_trailcam_dbs.json` - hand-editable database catalog.
+- `sources/official_govt_cam_sources.json` - official government/public-agency wildlife camera catalog.
+- `sources/partner_nonprofit_cam_sources.json` - partner, nonprofit, university, refuge, and conservancy camera catalog.
 - `trailcam_creds.local.json` - generated local credential template. Do not commit this file.
 
 ## Basic usage
@@ -21,34 +23,62 @@ python3 camsleuth.py --db lila_catalog --find deer Pennsylvania --limit 10
 ## Personal / Small-Collection Trail-Cam Sources
 
 ```bash
-python3 camsleuth.py --personal-sources personal_trailcam_sources.json --validate-personal-config
-python3 camsleuth.py --personal-sources personal_trailcam_sources.json --check-personal
-python3 camsleuth.py --personal-sources personal_trailcam_sources.json --discover
+python3 camsleuth.py --personal-sources sources/personal_trailcam_sources.json --validate-personal-config
+python3 camsleuth.py --personal-sources sources/personal_trailcam_sources.json --check-personal
+python3 camsleuth.py --personal-sources sources/personal_trailcam_sources.json --discover
 python3 camsleuth.py --personal-source all --find bobcat --limit 10
 python3 camsleuth.py --personal-source all --find "trail camera" coyote --export-results coyote_personal_results.csv
-python3 camsleuth.py --personal-sources personal_trailcam_sources.json --export-leads trailcam_personal_leads.csv
+python3 camsleuth.py --personal-sources sources/personal_trailcam_sources.json --export-leads trailcam_personal_leads.csv
 ```
 
 These sources are public web sources, not open-source datasets. Use them for discovery, metadata indexing, and outreach. Do not download or reuse full media unless the license permits it or the owner grants permission.
+
+## Official Government Wildlife Cams
+
+Official agency camera pages are tracked separately from personal sources and open datasets:
+
+```bash
+python3 camsleuth.py --government-cam-sources sources/official_govt_cam_sources.json --validate-government-cam-config
+python3 camsleuth.py --government-cam-sources sources/official_govt_cam_sources.json --check-government-cams
+python3 camsleuth.py --government-cam-sources sources/official_govt_cam_sources.json --discover-government-cams
+python3 camsleuth.py --government-cam-source all --find elk --limit 10
+python3 camsleuth.py --government-cam-sources sources/official_govt_cam_sources.json --export-government-cam-leads trailcam_government_cam_leads.csv
+```
+
+These sources are public viewing or public-submission surfaces, not open media datasets. Keep media downloads disabled unless agency terms or explicit permission allow reuse.
+
+## Partner / Nonprofit Wildlife Cams
+
+Partner and nonprofit camera pages are tracked separately from official agency and personal sources:
+
+```bash
+python3 camsleuth.py --partner-nonprofit-sources sources/partner_nonprofit_cam_sources.json --validate-partner-nonprofit-config
+python3 camsleuth.py --partner-nonprofit-sources sources/partner_nonprofit_cam_sources.json --check-partner-nonprofit
+python3 camsleuth.py --partner-nonprofit-sources sources/partner_nonprofit_cam_sources.json --discover-partner-nonprofit
+python3 camsleuth.py --partner-nonprofit-source all --find osprey --limit 10
+python3 camsleuth.py --partner-nonprofit-sources sources/partner_nonprofit_cam_sources.json --export-partner-nonprofit-leads trailcam_partner_nonprofit_leads.csv
+```
+
+These include nonprofit, university, refuge friends group, conservancy, and partner-hosted wildlife cameras. Treat them as discovery and outreach leads unless the partner explicitly grants reuse rights.
 
 ## Social Trail-Cam Discovery
 
 Social platforms are used for metadata-only discovery and outreach. They are not treated as open datasets. The tool does not download videos/images by default and does not scrape private or logged-in content.
 
 ```bash
-python3 camsleuth.py --social-sources social_trailcam_sources.json --validate-social-config
-python3 camsleuth.py --social-sources social_trailcam_sources.json --check-social
-python3 camsleuth.py --social-sources social_trailcam_sources.json --discover-social
+python3 camsleuth.py --social-sources sources/social_trailcam_sources.json --validate-social-config
+python3 camsleuth.py --social-sources sources/social_trailcam_sources.json --check-social
+python3 camsleuth.py --social-sources sources/social_trailcam_sources.json --discover-social
 python3 camsleuth.py --social-source all --find bobcat --limit 10
 python3 camsleuth.py --social-source all --find pennsylvania deer --export-social-results pa_deer_social_results.csv
-python3 camsleuth.py --social-sources social_trailcam_sources.json --export-social-leads trailcam_social_leads.csv
+python3 camsleuth.py --social-sources sources/social_trailcam_sources.json --export-social-leads trailcam_social_leads.csv
 ```
 
 Public social posts are not automatically reusable training data. Use exported leads for outreach. Ingest original media only when the creator grants permission or the post/license explicitly allows reuse.
 
 ## Location Coverage
 
-CamSleuth can build a location index from open datasets, personal sources, social discovery metadata, and manual leads. It tracks coordinate precision explicitly so county/state/social signals are not confused with confirmed camera deployments.
+CamSleuth can build a location index from open datasets, personal sources, official government cams, partner/nonprofit cams, social discovery metadata, and manual leads. It tracks coordinate precision explicitly so county/state/social signals are not confused with confirmed camera deployments.
 
 ```bash
 python3 camsleuth.py --build-location-index
@@ -99,7 +129,7 @@ python3 camsleuth.py --db caltech_camera_traps --map --download-metadata
 
 Most configured sources are public static datasets or public download pages. The generated credentials file still exists so private/tokenized endpoints can be added later without changing the script.
 
-To add a tokenized source, edit `open_trailcam_dbs.json`:
+To add a tokenized source, edit `sources/open_trailcam_dbs.json`:
 
 ```json
 "auth": {"type": "bearer_token", "required": true}

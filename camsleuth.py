@@ -36,15 +36,19 @@ from urllib.robotparser import RobotFileParser
 # ****************************************************************************************
 
 SCRIPT_NAME = os.path.basename(sys.argv[0])
-DEFAULT_DB_CONFIG = 'open_trailcam_dbs.json'
+DEFAULT_DB_CONFIG = 'sources/open_trailcam_dbs.json'
 DEFAULT_CREDS_CONFIG = 'trailcam_creds.local.json'
-DEFAULT_PERSONAL_SOURCES_CONFIG = 'personal_trailcam_sources.json'
-DEFAULT_SOCIAL_SOURCES_CONFIG = 'social_trailcam_sources.json'
-DEFAULT_SOCIAL_MANUAL_SEEDS = 'social_manual_seeds.csv'
+DEFAULT_PERSONAL_SOURCES_CONFIG = 'sources/personal_trailcam_sources.json'
+DEFAULT_GOVERNMENT_CAM_SOURCES_CONFIG = 'sources/official_govt_cam_sources.json'
+DEFAULT_PARTNER_NONPROFIT_SOURCES_CONFIG = 'sources/partner_nonprofit_cam_sources.json'
+DEFAULT_SOCIAL_SOURCES_CONFIG = 'sources/social_trailcam_sources.json'
+DEFAULT_SOCIAL_MANUAL_SEEDS = 'sources/social_manual_seeds.csv'
 DEFAULT_LOG_FILE = 'camsleuth.log'
 DEFAULT_CACHE_DIR = './trailcam_cache'
 DEFAULT_API_MAP_DIR = './trailcam_api_maps'
 DEFAULT_PERSONAL_CACHE_DIR = './trailcam_personal_cache'
+DEFAULT_GOVERNMENT_CAM_CACHE_DIR = './trailcam_government_cam_cache'
+DEFAULT_PARTNER_NONPROFIT_CACHE_DIR = './trailcam_partner_nonprofit_cache'
 DEFAULT_SOCIAL_CACHE_DIR = './trailcam_social_cache'
 DEFAULT_COVERAGE_DIR = './trailcam_coverage'
 DEFAULT_TIMEOUT_SEC = 30
@@ -306,6 +310,22 @@ def get_personal_defaults(config):
         'cache_dir': DEFAULT_PERSONAL_CACHE_DIR
     }
 
+def get_government_cam_defaults(config):
+    '''
+    Return official government camera defaults with script fallbacks.
+    '''
+    defaults = get_personal_defaults(config)
+    defaults['cache_dir'] = DEFAULT_GOVERNMENT_CAM_CACHE_DIR
+    return defaults
+
+def get_partner_nonprofit_defaults(config):
+    '''
+    Return partner/nonprofit camera defaults with script fallbacks.
+    '''
+    defaults = get_personal_defaults(config)
+    defaults['cache_dir'] = DEFAULT_PARTNER_NONPROFIT_CACHE_DIR
+    return defaults
+
 def get_social_defaults(config):
     '''
     Return social-source defaults with script fallbacks.
@@ -328,6 +348,18 @@ def get_social_defaults(config):
 def load_personal_sources_config(path):
     '''
     Load the personal/small-collection sources config.
+    '''
+    return load_json(path)
+
+def load_government_cam_sources_config(path):
+    '''
+    Load the official government camera sources config.
+    '''
+    return load_json(path)
+
+def load_partner_nonprofit_sources_config(path):
+    '''
+    Load the partner/nonprofit camera sources config.
     '''
     return load_json(path)
 
@@ -390,6 +422,40 @@ def get_personal_sources(config, source_id=None):
         sources = [source for source in sources if source.get('source_id') == source_id]
         if not sources:
             raise PersonalConfigError(f'No personal source found with id: {source_id}')
+    return sources
+
+def validate_government_cam_sources_config(config):
+    '''
+    Validate official government camera config and return a summary.
+    '''
+    return validate_personal_sources_config(config)
+
+def get_government_cam_sources(config, source_id=None):
+    '''
+    Return configured official government camera sources, optionally filtered.
+    '''
+    sources = config.get('sources', [])
+    if source_id and source_id != 'all':
+        sources = [source for source in sources if source.get('source_id') == source_id]
+        if not sources:
+            raise PersonalConfigError(f'No government camera source found with id: {source_id}')
+    return sources
+
+def validate_partner_nonprofit_sources_config(config):
+    '''
+    Validate partner/nonprofit camera config and return a summary.
+    '''
+    return validate_personal_sources_config(config)
+
+def get_partner_nonprofit_sources(config, source_id=None):
+    '''
+    Return configured partner/nonprofit camera sources, optionally filtered.
+    '''
+    sources = config.get('sources', [])
+    if source_id and source_id != 'all':
+        sources = [source for source in sources if source.get('source_id') == source_id]
+        if not sources:
+            raise PersonalConfigError(f'No partner/nonprofit camera source found with id: {source_id}')
     return sources
 
 def load_social_sources_config(path):
@@ -1832,7 +1898,7 @@ def normalize_open_db_locations(db_config_path, cache_dir):
             })
     return records
 
-def normalize_personal_locations(cache_dir, config_path):
+def normalize_personal_locations(cache_dir, config_path, normalized_source_type='personal'):
     '''
     Normalize location-aware records from personal-source cache.
     '''
@@ -1842,7 +1908,7 @@ def normalize_personal_locations(cache_dir, config_path):
         source_id = source.get('source_id')
         records['sources'].append({
             'source_id': source_id,
-            'source_type': 'personal',
+            'source_type': normalized_source_type,
             'platform': source.get('platform'),
             'display_name': source.get('display_name'),
             'base_url': source.get('base_url'),
@@ -1888,7 +1954,7 @@ def normalize_personal_locations(cache_dir, config_path):
             'creator_display_name': source.get('display_name'),
             'profile_url': source.get('base_url'),
             'contact_path': source.get('contact_path') or source.get('base_url'),
-            'source_type': 'personal',
+            'source_type': normalized_source_type,
             'location_label': ', '.join(broad_locations),
             'admin_state': lead_resolved.get('admin_state', ''),
             'admin_county': lead_resolved.get('admin_county', ''),
@@ -2214,8 +2280,11 @@ def rebuild_coverage_cells(conn, resolution):
     conn.commit()
 
 def build_location_index(db_path, include_open_dbs=True, include_personal=True, include_social=True,
+                         include_government_cams=True, include_partner_nonprofit=True,
                          db_config_path=DEFAULT_DB_CONFIG, personal_config_path=DEFAULT_PERSONAL_SOURCES_CONFIG,
-                         social_config_path=DEFAULT_SOCIAL_SOURCES_CONFIG):
+                         social_config_path=DEFAULT_SOCIAL_SOURCES_CONFIG,
+                         government_cam_config_path=DEFAULT_GOVERNMENT_CAM_SOURCES_CONFIG,
+                         partner_nonprofit_config_path=DEFAULT_PARTNER_NONPROFIT_SOURCES_CONFIG):
     '''
     Build or update the unified location index.
     '''
@@ -2225,6 +2294,16 @@ def build_location_index(db_path, include_open_dbs=True, include_personal=True, 
         upsert_location_records(conn, normalize_open_db_locations(db_config_path, DEFAULT_CACHE_DIR))
     if include_personal and os.path.exists(personal_config_path):
         upsert_location_records(conn, normalize_personal_locations(DEFAULT_PERSONAL_CACHE_DIR, personal_config_path))
+    if include_government_cams and os.path.exists(government_cam_config_path):
+        upsert_location_records(conn, normalize_personal_locations(
+            DEFAULT_GOVERNMENT_CAM_CACHE_DIR,
+            government_cam_config_path,
+            'official_government_cam'))
+    if include_partner_nonprofit and os.path.exists(partner_nonprofit_config_path):
+        upsert_location_records(conn, normalize_personal_locations(
+            DEFAULT_PARTNER_NONPROFIT_CACHE_DIR,
+            partner_nonprofit_config_path,
+            'partner_nonprofit_cam'))
     if include_social and os.path.exists(social_config_path):
         upsert_location_records(conn, normalize_social_locations(DEFAULT_SOCIAL_CACHE_DIR, social_config_path))
     rebuild_coverage_cells(conn, 2)
@@ -3273,6 +3352,10 @@ def handle_args():
     parser.add_argument('--creds-config', default=DEFAULT_CREDS_CONFIG, help='Path to local credentials config JSON.')
     parser.add_argument('--personal-sources', default=DEFAULT_PERSONAL_SOURCES_CONFIG, help='Path to personal/small-collection sources JSON.')
     parser.add_argument('--personal-source', help='Personal source id, or "all" for every source.')
+    parser.add_argument('--government-cam-sources', default=DEFAULT_GOVERNMENT_CAM_SOURCES_CONFIG, help='Path to official government camera sources JSON.')
+    parser.add_argument('--government-cam-source', help='Government camera source id, or "all" for every source.')
+    parser.add_argument('--partner-nonprofit-sources', default=DEFAULT_PARTNER_NONPROFIT_SOURCES_CONFIG, help='Path to partner/nonprofit camera sources JSON.')
+    parser.add_argument('--partner-nonprofit-source', help='Partner/nonprofit camera source id, or "all" for every source.')
     parser.add_argument('--social-sources', default=DEFAULT_SOCIAL_SOURCES_CONFIG, help='Path to social discovery sources JSON.')
     parser.add_argument('--social-source', help='Social source id, or "all" for every source.')
     parser.add_argument('--social-manual-seeds', default=DEFAULT_SOCIAL_MANUAL_SEEDS, help='Path to social manual review seeds CSV.')
@@ -3281,6 +3364,8 @@ def handle_args():
     parser.add_argument('--location-index', default=f'{DEFAULT_COVERAGE_DIR}/trailcam_location_index.sqlite', help='Path to the SQLite location index.')
     parser.add_argument('--include-open-dbs', action='store_true', help='Include open/institutional DBs in the location index.')
     parser.add_argument('--include-personal', action='store_true', help='Include personal-source cache in the location index.')
+    parser.add_argument('--include-government-cams', action='store_true', help='Include official government camera cache in the location index.')
+    parser.add_argument('--include-partner-nonprofit', action='store_true', help='Include partner/nonprofit camera cache in the location index.')
     parser.add_argument('--include-social', action='store_true', help='Include social-source cache in the location index.')
     parser.add_argument('--export-geojson', help='Write location points GeoJSON to this path.')
     parser.add_argument('--export-h3-coverage', help='Write H3/grid coverage GeoJSON to this path.')
@@ -3303,6 +3388,12 @@ def handle_args():
     parser.add_argument('--validate-personal-config', action='store_true', help='Validate the personal-source config file.')
     parser.add_argument('--check-personal', action='store_true', help='Check entry-URL accessibility for configured personal sources.')
     parser.add_argument('--discover', action='store_true', help='Discover and cache metadata for configured personal sources.')
+    parser.add_argument('--validate-government-cam-config', action='store_true', help='Validate the official government camera config file.')
+    parser.add_argument('--check-government-cams', action='store_true', help='Check entry-URL accessibility for configured government camera sources.')
+    parser.add_argument('--discover-government-cams', action='store_true', help='Discover and cache metadata for configured government camera sources.')
+    parser.add_argument('--validate-partner-nonprofit-config', action='store_true', help='Validate the partner/nonprofit camera config file.')
+    parser.add_argument('--check-partner-nonprofit', action='store_true', help='Check entry-URL accessibility for configured partner/nonprofit camera sources.')
+    parser.add_argument('--discover-partner-nonprofit', action='store_true', help='Discover and cache metadata for configured partner/nonprofit camera sources.')
     parser.add_argument('--validate-social-config', action='store_true', help='Validate the social discovery config file.')
     parser.add_argument('--check-social', action='store_true', help='Check readiness for configured social discovery sources.')
     parser.add_argument('--discover-social', action='store_true', help='Discover and cache metadata for configured social sources.')
@@ -3317,6 +3408,10 @@ def handle_args():
     parser.add_argument('--limit', type=int, default=20, help='Maximum search results per database.')
     parser.add_argument('--export-leads', help='Write personal leads or location creator leads to this CSV path.')
     parser.add_argument('--export-results', help='Write personal search results to this CSV path.')
+    parser.add_argument('--export-government-cam-leads', help='Write government camera leads to this CSV path.')
+    parser.add_argument('--export-government-cam-results', help='Write government camera search results to this CSV path.')
+    parser.add_argument('--export-partner-nonprofit-leads', help='Write partner/nonprofit camera leads to this CSV path.')
+    parser.add_argument('--export-partner-nonprofit-results', help='Write partner/nonprofit camera search results to this CSV path.')
     parser.add_argument('--export-social-leads', help='Write social discovery leads to this CSV path.')
     parser.add_argument('--export-social-results', help='Write social search results to this CSV path.')
     parser.add_argument('--output', help='Write JSON output to this path. Defaults to stdout for check/find and api map files for --map.')
@@ -3336,20 +3431,27 @@ def handle_args():
     log.debug('Checking script requirements...')
     if not any([
         args.init_creds, args.check, args.validate_personal_config, args.check_personal,
-        args.discover, args.validate_social_config, args.check_social, args.discover_social,
+        args.discover, args.validate_government_cam_config, args.check_government_cams,
+        args.discover_government_cams, args.validate_partner_nonprofit_config, args.check_partner_nonprofit,
+        args.discover_partner_nonprofit, args.validate_social_config, args.check_social, args.discover_social,
         args.import_manual_seeds, args.build_location_index, args.export_geojson, args.export_h3_coverage,
         args.serve_map, args.export_admin_rollups, args.coverage_report, args.coverage_place, args.import_manual_leads,
         args.lead_id and args.set_lead_status,
         args.scan_dbs, args.map, args.list_api, args.metadata_extract,
-        args.find, args.export_leads, args.export_social_leads
+        args.find, args.export_leads, args.export_government_cam_leads, args.export_partner_nonprofit_leads,
+        args.export_social_leads
     ]):
-        parser.error('Choose one action: --init-creds, --check, --validate-personal-config, --check-personal, --discover, --validate-social-config, --check-social, --discover-social, --import-manual-seeds, --build-location-index, --export-geojson, --export-h3-coverage, --export-admin-rollups, --coverage-report, --coverage-place, --import-manual-leads, --lead-id/--set-lead-status, --scan-dbs, --map, --list-api, --metadata-extract, --export-leads, --export-social-leads, or --find')
+        parser.error('Choose one action: --init-creds, --check, --validate-personal-config, --check-personal, --discover, --validate-government-cam-config, --check-government-cams, --discover-government-cams, --validate-partner-nonprofit-config, --check-partner-nonprofit, --discover-partner-nonprofit, --validate-social-config, --check-social, --discover-social, --import-manual-seeds, --build-location-index, --export-geojson, --export-h3-coverage, --export-admin-rollups, --coverage-report, --coverage-place, --import-manual-leads, --lead-id/--set-lead-status, --scan-dbs, --map, --list-api, --metadata-extract, --export-leads, --export-government-cam-leads, --export-partner-nonprofit-leads, --export-social-leads, or --find')
     if args.metadata_extract and not args.db:
         parser.error('--metadata-extract requires --db')
     if bool(args.lead_id) != bool(args.set_lead_status):
         parser.error('--lead-id and --set-lead-status must be used together')
     if args.personal_source and not any([args.find]):
         log.debug('Ignoring --personal-source without a personal search action.')
+    if args.government_cam_source and not any([args.find]):
+        log.debug('Ignoring --government-cam-source without a government camera search action.')
+    if args.partner_nonprofit_source and not any([args.find]):
+        log.debug('Ignoring --partner-nonprofit-source without a partner/nonprofit camera search action.')
 
     log.info('++++++++++++++++++++++++++++++++++++++++++++++')
     log.info(f'+  {SCRIPT_NAME}')
@@ -3371,16 +3473,20 @@ def main():
     location_export_leads = bool(args.export_leads and ('trailcam_coverage' in args.export_leads or any([args.build_location_index, args.export_geojson, args.export_h3_coverage, args.export_admin_rollups, args.coverage_report, args.coverage_place, args.import_manual_leads, args.lead_id, args.set_lead_status, args.lead_status, args.serve_map])))
     location_mode = any([args.build_location_index, args.export_geojson, args.export_h3_coverage, args.serve_map, args.export_admin_rollups, args.coverage_report, args.coverage_place, args.import_manual_leads, args.lead_id and args.set_lead_status, location_export_leads])
     social_mode = any([args.validate_social_config, args.check_social, args.discover_social, args.export_social_leads, args.import_manual_seeds]) or (args.social_source and args.find)
+    government_cam_mode = any([args.validate_government_cam_config, args.check_government_cams, args.discover_government_cams, args.export_government_cam_leads]) or (args.government_cam_source and args.find)
+    partner_nonprofit_mode = any([args.validate_partner_nonprofit_config, args.check_partner_nonprofit, args.discover_partner_nonprofit, args.export_partner_nonprofit_leads]) or (args.partner_nonprofit_source and args.find)
     personal_mode = any([args.validate_personal_config, args.check_personal, args.discover, args.export_leads and not location_export_leads]) or (args.personal_source and args.find)
 
     if location_mode:
         include_open = args.include_open_dbs
         include_personal = args.include_personal
+        include_government_cams = args.include_government_cams
+        include_partner_nonprofit = args.include_partner_nonprofit
         include_social = args.include_social
-        if args.build_location_index and not any([include_open, include_personal, include_social]):
-            include_open = include_personal = include_social = True
+        if args.build_location_index and not any([include_open, include_personal, include_government_cams, include_partner_nonprofit, include_social]):
+            include_open = include_personal = include_government_cams = include_partner_nonprofit = include_social = True
         if args.build_location_index:
-            build_location_index(args.location_index, include_open, include_personal, include_social)
+            build_location_index(args.location_index, include_open, include_personal, include_social, include_government_cams, include_partner_nonprofit)
         if args.export_geojson:
             export_locations_geojson(args.location_index, args.export_geojson)
         if args.export_h3_coverage:
@@ -3401,6 +3507,126 @@ def main():
         if args.serve_map:
             serve_local_map(args.map_port)
         return
+
+    if government_cam_mode:
+        government_cam_config = load_government_cam_sources_config(args.government_cam_sources)
+        validation = validate_government_cam_sources_config(government_cam_config)
+        government_cam_defaults = get_government_cam_defaults(government_cam_config)
+        sources = get_government_cam_sources(government_cam_config, args.government_cam_source)
+
+        if args.validate_government_cam_config:
+            if args.output:
+                write_json(args.output, validation)
+            else:
+                print(json.dumps(validation, indent=2, sort_keys=True))
+            return
+
+        if args.check_government_cams:
+            payload = {'sources': [get_personal_adapter(source).check(source, government_cam_defaults) for source in sources]}
+            if args.output:
+                write_json(args.output, payload)
+            else:
+                print(json.dumps(payload, indent=2, sort_keys=True))
+            return
+
+        if args.discover_government_cams:
+            payload = {'sources': [get_personal_adapter(source).discover(source, government_cam_defaults) for source in sources]}
+            if args.output:
+                write_json(args.output, payload)
+            else:
+                print(json.dumps(payload, indent=2, sort_keys=True))
+            return
+
+        if args.export_government_cam_leads:
+            payload = export_personal_leads(sources, government_cam_defaults, args.export_government_cam_leads)
+            if args.output:
+                write_json(args.output, payload)
+            else:
+                print(json.dumps(payload, indent=2, sort_keys=True))
+            return
+
+        if args.find and args.government_cam_source:
+            payload = {'terms': args.find, 'sources': []}
+            flat_results = []
+            for source in sources:
+                try:
+                    results = get_personal_adapter(source).search(source, government_cam_defaults, args.find, args.limit)
+                except ConfigError as exc:
+                    results = [{'error': str(exc)}]
+                payload['sources'].append({
+                    'source_id': source.get('source_id'),
+                    'display_name': source.get('display_name'),
+                    'result_count': len(results),
+                    'results': results
+                })
+                flat_results.extend(result for result in results if 'error' not in result)
+            if args.export_government_cam_results:
+                export_personal_results(flat_results, args.export_government_cam_results)
+            if args.output:
+                write_json(args.output, payload)
+            else:
+                print(json.dumps(payload, indent=2, sort_keys=True))
+            return
+
+    if partner_nonprofit_mode:
+        partner_nonprofit_config = load_partner_nonprofit_sources_config(args.partner_nonprofit_sources)
+        validation = validate_partner_nonprofit_sources_config(partner_nonprofit_config)
+        partner_nonprofit_defaults = get_partner_nonprofit_defaults(partner_nonprofit_config)
+        sources = get_partner_nonprofit_sources(partner_nonprofit_config, args.partner_nonprofit_source)
+
+        if args.validate_partner_nonprofit_config:
+            if args.output:
+                write_json(args.output, validation)
+            else:
+                print(json.dumps(validation, indent=2, sort_keys=True))
+            return
+
+        if args.check_partner_nonprofit:
+            payload = {'sources': [get_personal_adapter(source).check(source, partner_nonprofit_defaults) for source in sources]}
+            if args.output:
+                write_json(args.output, payload)
+            else:
+                print(json.dumps(payload, indent=2, sort_keys=True))
+            return
+
+        if args.discover_partner_nonprofit:
+            payload = {'sources': [get_personal_adapter(source).discover(source, partner_nonprofit_defaults) for source in sources]}
+            if args.output:
+                write_json(args.output, payload)
+            else:
+                print(json.dumps(payload, indent=2, sort_keys=True))
+            return
+
+        if args.export_partner_nonprofit_leads:
+            payload = export_personal_leads(sources, partner_nonprofit_defaults, args.export_partner_nonprofit_leads)
+            if args.output:
+                write_json(args.output, payload)
+            else:
+                print(json.dumps(payload, indent=2, sort_keys=True))
+            return
+
+        if args.find and args.partner_nonprofit_source:
+            payload = {'terms': args.find, 'sources': []}
+            flat_results = []
+            for source in sources:
+                try:
+                    results = get_personal_adapter(source).search(source, partner_nonprofit_defaults, args.find, args.limit)
+                except ConfigError as exc:
+                    results = [{'error': str(exc)}]
+                payload['sources'].append({
+                    'source_id': source.get('source_id'),
+                    'display_name': source.get('display_name'),
+                    'result_count': len(results),
+                    'results': results
+                })
+                flat_results.extend(result for result in results if 'error' not in result)
+            if args.export_partner_nonprofit_results:
+                export_personal_results(flat_results, args.export_partner_nonprofit_results)
+            if args.output:
+                write_json(args.output, payload)
+            else:
+                print(json.dumps(payload, indent=2, sort_keys=True))
+            return
 
     if social_mode:
         social_config = load_social_sources_config(args.social_sources)

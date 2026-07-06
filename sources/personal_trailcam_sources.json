@@ -316,22 +316,34 @@
       "notes": "Forum thread where users share predator/game trail-cam pictures."
     },
     {
-      "source_id": "alaska_adfg_trail_camera_gallery",
-      "display_name": "Alaska ADF&G Trail Camera Gallery",
-      "source_type": "public_submission_gallery",
-      "platform": "government_gallery",
-      "base_url": "https://www.adfg.alaska.gov/index.cfm?adfg=viewing.trailcams",
-      "entry_urls": ["https://www.adfg.alaska.gov/index.cfm?adfg=viewing.trailcams"],
-      "content_types": ["html", "images"],
+      "source_id": "hdontap_live_wildlife_cams",
+      "display_name": "HDOnTap Live Wildlife Cams",
+      "source_type": "public_live_cam_directory",
+      "platform": "hdontap",
+      "base_url": "https://hdontap.com/",
+      "entry_urls": [
+        "https://hdontap.com/explore/tag/wildlife/",
+        "https://hdontap.com/explore/tag/animals/",
+        "https://hdontap.com/explore/tag/deer/",
+        "https://hdontap.com/explore/tag/deer-feeder-cam/",
+        "https://hdontap.com/explore/tag/elk/",
+        "https://hdontap.com/explore/tag/bears/",
+        "https://hdontap.com/explore/tag/brown-bears/",
+        "https://hdontap.com/explore/tag/bison/",
+        "https://hdontap.com/explore/tag/wolves/",
+        "https://hdontap.com/explore/tag/alligators/",
+        "https://hdontap.com/explore/tag/wildlife-refuge/"
+      ],
+      "content_types": ["html", "embedded_video", "live_stream_metadata"],
       "search_strategy": {
-        "mode": "gallery_index",
-        "seed_queries": ["trail camera", "bear", "moose", "wolf", "lynx", "public submission"]
+        "mode": "live_cam_directory",
+        "seed_queries": ["wildlife cam", "trail cam", "deer feeder cam", "elk", "bear", "bison", "wolf", "alligator", "wildlife refuge"]
       },
       "expected_metadata": ["source_id", "source_url", "page_url", "page_title", "page_date", "species_terms", "broad_location", "media_urls", "video_urls", "caption_text", "license_status", "contact_path"],
       "license_status": "check_site_terms",
       "ingestion_status": "candidate",
-      "priority": "medium_high",
-      "notes": "Public-submission gallery. Not personal-hosted, but includes scientist/public trail-camera submissions."
+      "priority": "high",
+      "notes": "Public live webcam directory with wildlife, animal, deer feeder, elk, bear, bison, and refuge camera tags. Use for discovery and outreach metadata; do not treat public streams as reusable media without permission."
     }
   ]
 }
